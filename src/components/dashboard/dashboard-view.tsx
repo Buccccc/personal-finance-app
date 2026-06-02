@@ -423,6 +423,7 @@ function CategoryBreakdownCard({
                       ))}
                     </Pie>
                     <Tooltip
+                      cursor={false}
                       formatter={(value) => formatMoney(Number(value))}
                     />
                   </PieChart>
@@ -452,6 +453,7 @@ function CategoryBreakdownCard({
                       tick={{ fontSize: 12 }}
                     />
                     <Tooltip
+                      cursor={false}
                       formatter={(value) => formatMoney(Number(value))}
                     />
                     <Bar dataKey="value" radius={[0, 6, 6, 0]}>

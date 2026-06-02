@@ -361,6 +361,7 @@ function ItemHistoryChart({
                 width={84}
               />
               <Tooltip
+                cursor={false}
                 formatter={(v) => formatMoney(Number(v))}
                 labelFormatter={(d) => formatDate(String(d))}
               />

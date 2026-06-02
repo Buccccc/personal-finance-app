@@ -126,7 +126,7 @@ export function LineChart({
         />
         <Tooltip
           content={<ChartTooltip valueFormatter={valueFormatter} />}
-          cursor={{ strokeDasharray: "3 3" }}
+          cursor={false}
         />
         {categories.map((category, categoryIndex) => (
           <Line
@@ -168,7 +168,7 @@ export function BarChart({
         />
         <Tooltip
           content={<ChartTooltip valueFormatter={valueFormatter} />}
-          cursor={{ fill: "var(--muted)" }}
+          cursor={false}
         />
         {categories.map((category, categoryIndex) => (
           <Bar
@@ -207,7 +207,7 @@ export function AreaChart({
         />
         <Tooltip
           content={<ChartTooltip valueFormatter={valueFormatter} />}
-          cursor={{ strokeDasharray: "3 3" }}
+          cursor={false}
         />
         {categories.map((category, categoryIndex) => {
           const color = getColor(colors, categoryIndex);
