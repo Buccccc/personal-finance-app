@@ -24,12 +24,12 @@ import {
   useDeleteAllocationItem,
   useReorderAllocationItems,
   useUpdateAllocationItem,
-  useUpdateAllocationPool,
   type AllocationItem,
   type AllocationPool,
   type AllocationSource,
   type AllocationSummary,
 } from "@/lib/hooks/allocations";
+import { useNetWorthItems } from "@/lib/hooks/net-worth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -128,8 +128,8 @@ export function AllocationsManager() {
   const pools = useAllocationPools();
   const items = useAllocationItems();
   const summaries = useAllocationSummary();
+  const networthItems = useNetWorthItems();
   const createPool = useCreateAllocationPool();
-  const updatePool = useUpdateAllocationPool();
   const createItem = useCreateAllocationItem();
   const updateItem = useUpdateAllocationItem();
   const deleteItem = useDeleteAllocationItem();
@@ -149,7 +149,30 @@ export function AllocationsManager() {
     () => summaryByPoolId(summaries.data ?? []),
     [summaries.data],
   );
-  const isLoading = pools.isLoading || items.isLoading || summaries.isLoading;
+  // Pool totals come from the latest net-worth value: Balance pool = latest
+  // E-Cash, Savings pool = latest Savings (summed across matching items).
+  const sourceTotals = useMemo(() => {
+    const totals: Record<AllocationSource, number> = { balance: 0, savings: 0 };
+    for (const item of networthItems.data ?? []) {
+      const value = Number(item.latestEntry?.value ?? 0);
+      if (item.networthClass.name === "ecash") totals.balance += value;
+      else if (item.networthClass.name === "savings") totals.savings += value;
+    }
+    return totals;
+  }, [networthItems.data]);
+
+  const poolTotal = (pool: AllocationPool) =>
+    pool.source === "balance"
+      ? sourceTotals.balance
+      : pool.source === "savings"
+        ? sourceTotals.savings
+        : Number(pool.manual_total);
+
+  const isLoading =
+    pools.isLoading ||
+    items.isLoading ||
+    summaries.isLoading ||
+    networthItems.isLoading;
 
   const openCreateItemDialog = (pool: AllocationPool) => {
     setEditingItem(null);
@@ -218,21 +241,11 @@ export function AllocationsManager() {
                 pool={pool}
                 items={poolItems}
                 allocated={allocated}
-                onUpdatePoolTotal={async (manualTotal) => {
-                  await updatePool.mutateAsync({
-                    id: pool.id,
-                    pool: {
-                      name: pool.name,
-                      source: pool.source,
-                      manual_total: manualTotal,
-                    },
-                  });
-                }}
+                total={poolTotal(pool)}
                 onAddItem={() => openCreateItemDialog(pool)}
                 onEditItem={(item) => openEditItemDialog(pool, item)}
                 onDeleteItem={setDeletingItem}
                 onMoveItem={handleMoveItem}
-                isSavingTotal={updatePool.isPending}
                 isReordering={reorderItems.isPending}
               />
             );
@@ -372,18 +385,17 @@ function AllocationPoolCard({
   pool,
   items,
   allocated,
-  onUpdatePoolTotal,
+  total,
   onAddItem,
   onEditItem,
   onDeleteItem,
   onMoveItem,
-  isSavingTotal,
   isReordering,
 }: {
   pool: AllocationPool;
   items: AllocationItem[];
   allocated: number;
-  onUpdatePoolTotal: (manualTotal: number) => Promise<void>;
+  total: number;
   onAddItem: () => void;
   onEditItem: (item: AllocationItem) => void;
   onDeleteItem: (item: AllocationItem) => void;
@@ -391,36 +403,16 @@ function AllocationPoolCard({
     currentItem: AllocationItem,
     targetItem: AllocationItem,
   ) => Promise<void>;
-  isSavingTotal: boolean;
   isReordering: boolean;
 }) {
-  const [manualTotal, setManualTotal] = useState(String(pool.manual_total));
-  const [lastPoolId, setLastPoolId] = useState(pool.id);
-  const [lastPoolTotal, setLastPoolTotal] = useState(pool.manual_total);
-  const total = Number(pool.manual_total);
   const unallocated = total - allocated;
   const progress = total > 0 ? Math.min((allocated / total) * 100, 100) : 0;
-
-  if (pool.id !== lastPoolId || pool.manual_total !== lastPoolTotal) {
-    setLastPoolId(pool.id);
-    setLastPoolTotal(pool.manual_total);
-    setManualTotal(String(pool.manual_total));
-  }
-
-  const handleSaveTotal = async () => {
-    const parsedTotal = parseMoneyInput(manualTotal);
-    if (parsedTotal === null || parsedTotal < 0) {
-      toast.error("Pool total must be zero or more");
-      return;
-    }
-
-    try {
-      await onUpdatePoolTotal(parsedTotal);
-      toast.success("Pool total updated");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save pool total");
-    }
-  };
+  const totalSourceLabel =
+    pool.source === "balance"
+      ? "From latest E-Cash value"
+      : pool.source === "savings"
+        ? "From latest Savings value"
+        : "Manual total";
 
   return (
     <Card>
@@ -441,26 +433,14 @@ function AllocationPoolCard({
       </CardHeader>
 
       <CardContent className="space-y-5">
-        <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_auto_auto] md:items-end">
-          <div className="space-y-2">
-            <Label htmlFor={`pool-total-${pool.id}`}>Pool total</Label>
-            <div className="flex gap-2">
-              <Input
-                id={`pool-total-${pool.id}`}
-                type="number"
-                min="0"
-                step="0.01"
-                value={manualTotal}
-                onChange={(event) => setManualTotal(event.target.value)}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleSaveTotal}
-                disabled={isSavingTotal}
-              >
-                {isSavingTotal ? "Saving..." : "Save"}
-              </Button>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="lift rounded-lg border bg-muted/30 px-3 py-2">
+            <div className="text-xs text-muted-foreground">Pool total</div>
+            <div className="tabular font-semibold text-foreground">
+              {formatMoney(total)}
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              {totalSourceLabel}
             </div>
           </div>
 
