@@ -174,6 +174,17 @@ export function AllocationsManager() {
     summaries.isLoading ||
     networthItems.isLoading;
 
+  // Grand totals across every pool.
+  const totalToBuy = (items.data ?? []).reduce(
+    (sum, item) => sum + item.amount,
+    0,
+  );
+  const totalAvailable = (pools.data ?? []).reduce(
+    (sum, pool) => sum + poolTotal(pool),
+    0,
+  );
+  const totalUnallocated = totalAvailable - totalToBuy;
+
   const openCreateItemDialog = (pool: AllocationPool) => {
     setEditingItem(null);
     setItemDialogPool(pool);
@@ -221,6 +232,26 @@ export function AllocationsManager() {
           Add pool
         </Button>
       </PageHeader>
+
+      {!isLoading && pools.data && pools.data.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Overview</CardTitle>
+            <CardDescription>Across all pools.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <MoneyStat label="Things to buy" value={totalToBuy} />
+              <MoneyStat label="Available" value={totalAvailable} />
+              <MoneyStat
+                label="Unallocated"
+                value={totalUnallocated}
+                isNegative={totalUnallocated < 0}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isLoading ? (
         <AllocationsSkeleton />
