@@ -262,6 +262,9 @@ export function CsvImporter() {
             </CardHeader>
             <CardContent className="space-y-4">
               <Select
+                items={Object.fromEntries(
+                  accountOptions.map((a) => [a.id, a.name]),
+                )}
                 value={accountId}
                 onValueChange={(v) => setAccountId(v ?? "")}
               >
