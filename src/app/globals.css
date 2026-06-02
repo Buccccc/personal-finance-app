@@ -146,3 +146,14 @@
     transform: translateY(-2px);
   }
 }
+
+/* Stop iOS Safari from zooming when focusing a form control (needs >=16px).
+   Unlayered so it wins over Tailwind's text-sm utility on mobile. */
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select,
+  [cmdk-input] {
+    font-size: 16px;
+  }
+}

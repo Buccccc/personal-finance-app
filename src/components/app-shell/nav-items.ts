@@ -9,6 +9,7 @@ import {
   Layers,
   ListChecks,
   Upload,
+  Tags,
   type LucideIcon,
 } from "lucide-react";
 
@@ -41,6 +42,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Planning",
     items: [
       { href: "/allocations", label: "Allocations", icon: PiggyBank },
+      { href: "/categories", label: "Categories", icon: Tags },
       { href: "/rules", label: "Rules & Merchants", icon: Layers },
     ],
   },
