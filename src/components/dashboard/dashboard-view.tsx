@@ -49,6 +49,10 @@ import {
   type NetWorthCurrent,
   type NetWorthHistory,
 } from "@/lib/hooks/dashboard";
+import {
+  useNetWorthItems,
+  type NetWorthItemWithValues,
+} from "@/lib/hooks/net-worth";
 
 type CategoryChartItem = {
   name: string;
@@ -131,6 +135,7 @@ export function DashboardView() {
   const [offset, setOffset] = useState(0);
   const monthKey = getRelativeMonthKey(offset);
   const dashboard = useDashboardData(monthKey);
+  const netWorthItems = useNetWorthItems();
   const data = dashboard.data;
   const monthLabel = formatMonth(monthKey);
   const isCurrent = offset === 0;
@@ -255,6 +260,11 @@ export function DashboardView() {
         />
       )}
 
+      <NetWorthBreakdown
+        items={netWorthItems.data ?? []}
+        isLoading={netWorthItems.isLoading}
+      />
+
       <div className="grid gap-4 xl:grid-cols-2">
         <CategoryBreakdownCard
           title="Expenses by category"
@@ -367,6 +377,95 @@ function KpiGrid({
         </motion.div>
       ))}
     </div>
+  );
+}
+
+function NetWorthBreakdown({
+  items,
+  isLoading,
+}: {
+  items: NetWorthItemWithValues[];
+  isLoading: boolean;
+}) {
+  const active = items.filter((item) => item.active);
+  const assets = active.filter((item) => item.networthClass.kind === "asset");
+  const liabilities = active.filter(
+    (item) => item.networthClass.kind === "liability",
+  );
+
+  if (!isLoading && active.length === 0) return null;
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <NetWorthColumn
+        title="Assets"
+        items={assets}
+        isLoading={isLoading}
+        emptyText="No assets recorded."
+      />
+      <NetWorthColumn
+        title="Liabilities"
+        items={liabilities}
+        isLoading={isLoading}
+        emptyText="No liabilities recorded."
+      />
+    </div>
+  );
+}
+
+function NetWorthColumn({
+  title,
+  items,
+  isLoading,
+  emptyText,
+}: {
+  title: string;
+  items: NetWorthItemWithValues[];
+  isLoading: boolean;
+  emptyText: string;
+}) {
+  const total = items.reduce(
+    (sum, item) => sum + Math.abs(Number(item.latestEntry?.value ?? 0)),
+    0,
+  );
+
+  return (
+    <Card className="lift">
+      <CardHeader>
+        <div className="flex items-baseline justify-between gap-2">
+          <CardTitle className="text-base">{title}</CardTitle>
+          <span className="tabular text-sm font-semibold">
+            {isLoading ? "" : formatMoney(total)}
+          </span>
+        </div>
+        <CardDescription>Latest recorded values.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-11/12" />
+            <Skeleton className="h-8 w-10/12" />
+          </div>
+        ) : items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{emptyText}</p>
+        ) : (
+          <div className="divide-y">
+            {items.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between gap-3 py-2 text-sm"
+              >
+                <span className="min-w-0 truncate">{item.name}</span>
+                <span className="tabular shrink-0 font-medium">
+                  {formatMoney(Math.abs(Number(item.latestEntry?.value ?? 0)))}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
