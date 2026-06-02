@@ -228,11 +228,12 @@ function HeadlineCards({
       {headlineCards.map((card, index) => (
         <motion.div
           key={card.key}
+          className="h-full"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.22, delay: index * 0.04 }}
         >
-          <Card className="lift">
+          <Card className="lift h-full">
             <CardHeader>
               <CardDescription>{card.label}</CardDescription>
               <CardTitle className="tabular text-2xl">
