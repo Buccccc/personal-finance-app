@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "motion/react";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/app-shell/page-header";
 import {
   Card,
@@ -74,10 +76,12 @@ type SliceConfig = {
 
 type SlicePoint = {
   month: string;
+  year: number;
   monthLabel: string;
   axisLabel: string;
   value: number | null;
   comparison: number | null;
+  change: number | null;
   changePercent: number | null;
 };
 
@@ -174,14 +178,14 @@ const sliceConfigs: SliceConfig[] = [
   {
     key: "mom",
     label: "MoM",
-    description: "The monthly values as-is, with change vs the previous month.",
+    description: "Month-over-month difference for each metric (green up, red down).",
     comparisonLabel: "Previous month",
   },
   {
     key: "ytd",
     label: "YTD",
     description:
-      "Cash-flow values accumulate within each calendar year. Net-worth values stay point-in-time.",
+      "Year-to-date for the selected year — use the arrows to change year.",
     comparisonLabel: "Previous YTD point",
   },
   {
@@ -194,7 +198,7 @@ const sliceConfigs: SliceConfig[] = [
     key: "yoyYtd",
     label: "YoY by YTD",
     description:
-      "This year's year-to-date value compared with last year's value at the same point.",
+      "Selected year's YTD vs the prior year at the same point — use the arrows to change year.",
     comparisonLabel: "Prior-year YTD",
   },
 ];
@@ -382,15 +386,26 @@ function buildSlicePoints(
       comparison = previousRow?.values[metric.key] ?? null;
     }
 
+    const change =
+      value !== null && comparison !== null ? value - comparison : null;
+
     return {
       month: row.month,
+      year: row.year,
       monthLabel: formatMonth(row.month),
       axisLabel: axisMonthLabel(row.month),
       value,
       comparison,
+      change,
       changePercent: calculateChange(value, comparison),
     };
   });
+}
+
+function formatSigned(value: number | null, format: FormatKind): string {
+  if (value === null) return "—";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${formatMetricValue(value, format)}`;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -458,6 +473,18 @@ function SeriesPanel({
   rows: TrendMonth[];
   isLoading: boolean;
 }) {
+  const years = useMemo(
+    () => Array.from(new Set(rows.map((row) => row.year))).sort((a, b) => a - b),
+    [rows],
+  );
+  const latestYear = years[years.length - 1] ?? new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const activeYear =
+    selectedYear !== null && years.includes(selectedYear)
+      ? selectedYear
+      : latestYear;
+  const yearPos = years.indexOf(activeYear);
+
   if (isLoading) return <TrendsSkeleton />;
 
   if (rows.length === 0) {
@@ -487,28 +514,59 @@ function SeriesPanel({
           ))}
         </TabsList>
 
-        {sliceConfigs.map((slice) => (
-          <TabsContent key={slice.key} value={slice.key} className="space-y-4">
-            <div className="rounded-xl border bg-muted/20 p-4">
-              <p className="font-medium">{slice.label}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {slice.description}
-              </p>
-            </div>
+        {sliceConfigs.map((slice) => {
+          const yearFiltered = slice.key === "ytd" || slice.key === "yoyYtd";
+          return (
+            <TabsContent key={slice.key} value={slice.key} className="space-y-4">
+              <div className="flex flex-col gap-3 rounded-xl border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-medium">{slice.label}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {slice.description}
+                  </p>
+                </div>
+                {yearFiltered && years.length > 0 && (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      aria-label="Previous year"
+                      disabled={yearPos <= 0}
+                      onClick={() => setSelectedYear(years[yearPos - 1])}
+                    >
+                      <ChevronLeftIcon />
+                    </Button>
+                    <span className="tabular w-12 text-center text-sm font-semibold">
+                      {activeYear}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      aria-label="Next year"
+                      disabled={yearPos >= years.length - 1}
+                      onClick={() => setSelectedYear(years[yearPos + 1])}
+                    >
+                      <ChevronRightIcon />
+                    </Button>
+                  </div>
+                )}
+              </div>
 
-            <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-              {series.metrics.map((metric, index) => (
-                <MetricTrendCard
-                  key={metric.key}
-                  metric={metric}
-                  slice={slice}
-                  rows={rows}
-                  index={index}
-                />
-              ))}
-            </div>
-          </TabsContent>
-        ))}
+              <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+                {series.metrics.map((metric, index) => (
+                  <MetricTrendCard
+                    key={metric.key}
+                    metric={metric}
+                    slice={slice}
+                    rows={rows}
+                    index={index}
+                    filterYear={yearFiltered ? activeYear : null}
+                  />
+                ))}
+              </div>
+            </TabsContent>
+          );
+        })}
       </Tabs>
     </div>
   );
@@ -519,16 +577,24 @@ function MetricTrendCard({
   slice,
   rows,
   index,
+  filterYear,
 }: {
   metric: MetricConfig;
   slice: SliceConfig;
   rows: TrendMonth[];
   index: number;
+  filterYear: number | null;
 }) {
-  const points = buildSlicePoints(rows, metric, slice.key);
+  const allPoints = buildSlicePoints(rows, metric, slice.key);
+  const points =
+    filterYear !== null
+      ? allPoints.filter((point) => point.year === filterYear)
+      : allPoints;
+  // MoM plots the month-over-month difference, not the raw value.
+  const isMom = slice.key === "mom";
   const chartData: TrendChartData[] = points.map((point) => ({
     month: point.axisLabel,
-    [metric.label]: point.value,
+    [metric.label]: isMom ? point.change : point.value,
   }));
 
   return (
@@ -541,11 +607,13 @@ function MetricTrendCard({
       <Card className="h-full min-w-0 lift">
         <CardHeader>
           <CardTitle>{metric.label}</CardTitle>
-          <CardDescription>{metric.description}</CardDescription>
+          <CardDescription>
+            {isMom ? "Change vs the previous month." : metric.description}
+          </CardDescription>
         </CardHeader>
         <CardContent className="min-w-0 space-y-4">
-          <TrendChart metric={metric} data={chartData} />
-          <TrendTable points={points} metric={metric} slice={slice} />
+          <TrendChart metric={metric} data={chartData} momDelta={isMom} />
+          <TrendTable points={points} metric={metric} />
         </CardContent>
       </Card>
     </motion.div>
@@ -555,9 +623,11 @@ function MetricTrendCard({
 function TrendChart({
   metric,
   data,
+  momDelta,
 }: {
   metric: MetricConfig;
   data: TrendChartData[];
+  momDelta: boolean;
 }) {
   const props = {
     data,
@@ -567,19 +637,26 @@ function TrendChart({
     valueFormatter: (value: number) => formatMetricValue(value, metric.format),
   };
 
+  // MoM differences render as sign-coloured bars (green up / red down).
+  if (momDelta) return <BarChart {...props} colorBySign />;
   if (metric.chart === "bar") return <BarChart {...props} />;
   if (metric.chart === "area") return <AreaChart {...props} />;
   return <LineChart {...props} />;
 }
 
+function signClass(value: number | null): string {
+  if (value === null || value === 0) return "text-muted-foreground";
+  return value > 0
+    ? "text-emerald-600 dark:text-emerald-400"
+    : "text-red-600 dark:text-red-400";
+}
+
 function TrendTable({
   points,
   metric,
-  slice,
 }: {
   points: SlicePoint[];
   metric: MetricConfig;
-  slice: SliceConfig;
 }) {
   return (
     <div className="max-h-80 overflow-auto overflow-x-auto rounded-lg border">
@@ -588,7 +665,7 @@ function TrendTable({
           <TableRow>
             <TableHead>Month</TableHead>
             <TableHead className="text-right">Value</TableHead>
-            <TableHead className="text-right">{slice.comparisonLabel}</TableHead>
+            <TableHead className="text-right">Δ</TableHead>
             <TableHead className="text-right">Change</TableHead>
           </TableRow>
         </TableHeader>
@@ -599,10 +676,14 @@ function TrendTable({
               <TableCell className="tabular text-right">
                 {formatMetricValue(point.value, metric.format)}
               </TableCell>
-              <TableCell className="tabular text-right">
-                {formatMetricValue(point.comparison, metric.format)}
+              <TableCell
+                className={`tabular text-right ${signClass(point.change)}`}
+              >
+                {formatSigned(point.change, metric.format)}
               </TableCell>
-              <TableCell className="tabular text-right">
+              <TableCell
+                className={`tabular text-right ${signClass(point.changePercent)}`}
+              >
                 {formatChange(point.changePercent)}
               </TableCell>
             </TableRow>

@@ -7,8 +7,10 @@ import {
   Bar,
   BarChart as RechartsBarChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart as RechartsLineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -26,7 +28,12 @@ type ChartProps = {
   colors?: string[];
   valueFormatter?: (value: number) => string;
   className?: string;
+  /** Colour each bar green (>=0) / red (<0) — used for MoM difference charts. */
+  colorBySign?: boolean;
 };
+
+const POSITIVE = "#16a34a";
+const NEGATIVE = "#dc2626";
 
 const defaultColors = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)"];
 
@@ -152,6 +159,7 @@ export function BarChart({
   colors,
   valueFormatter,
   className,
+  colorBySign = false,
 }: ChartProps) {
   return (
     <ChartShell className={className}>
@@ -166,6 +174,7 @@ export function BarChart({
             valueFormatter ? valueFormatter(value) : String(value)
           }
         />
+        {colorBySign && <ReferenceLine y={0} stroke="var(--border)" />}
         <Tooltip
           content={<ChartTooltip valueFormatter={valueFormatter} />}
           cursor={false}
@@ -177,7 +186,19 @@ export function BarChart({
             name={category}
             fill={getColor(colors, categoryIndex)}
             radius={[4, 4, 0, 0]}
-          />
+          >
+            {colorBySign &&
+              data.map((datum, dataIndex) => {
+                const raw = datum[category];
+                const numeric = typeof raw === "number" ? raw : 0;
+                return (
+                  <Cell
+                    key={dataIndex}
+                    fill={numeric >= 0 ? POSITIVE : NEGATIVE}
+                  />
+                );
+              })}
+          </Bar>
         ))}
       </RechartsBarChart>
     </ChartShell>
