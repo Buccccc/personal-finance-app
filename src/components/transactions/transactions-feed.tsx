@@ -991,7 +991,7 @@ function TransactionFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {transaction ? "Edit transaction" : "Add transaction"}
@@ -1265,16 +1265,18 @@ function MobileTransactionsList({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-background md:hidden">
+    // Break out of the card's px-4 so rows span the full card width with
+    // symmetric left/right padding (native bank-app feel).
+    <div className="-mx-4 border-y md:hidden">
       {groups.map((group) => (
         <section key={group.date}>
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-muted/95 px-4 py-2 backdrop-blur">
+          <div className="flex items-center justify-between bg-muted/40 px-4 py-2">
             <h3 className="text-sm font-medium">{formatDate(group.date)}</h3>
             <span className="text-xs text-muted-foreground">
               {relativeDateHint(group.date)}
             </span>
           </div>
-          <div className="divide-y">
+          <div className="divide-y border-y">
             {group.rows.map((transaction) => (
               <MobileTransactionRow
                 key={transaction.id}
@@ -1289,7 +1291,7 @@ function MobileTransactionsList({
       {hasNextPage ? (
         <div
           ref={loadMoreRef}
-          className="border-t px-4 py-3 text-center text-xs text-muted-foreground"
+          className="px-4 py-3 text-center text-xs text-muted-foreground"
         >
           {isFetchingNextPage
             ? "Loading more transactions..."
