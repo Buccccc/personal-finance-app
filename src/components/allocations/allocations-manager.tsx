@@ -407,6 +407,10 @@ function AllocationPoolCard({
   isReordering: boolean;
 }) {
   const unallocated = total - allocated;
+  const targetTotal = items.reduce(
+    (sum, item) => sum + (item.target_amount ?? 0),
+    0,
+  );
   const progress = total > 0 ? Math.min((allocated / total) * 100, 100) : 0;
   const totalSourceLabel =
     pool.source === "balance"
@@ -434,7 +438,7 @@ function AllocationPoolCard({
       </CardHeader>
 
       <CardContent className="space-y-5">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           <div className="lift rounded-lg border bg-muted/30 px-3 py-2">
             <div className="text-xs text-muted-foreground">Pool total</div>
             <div className="tabular font-semibold text-foreground">
@@ -445,12 +449,13 @@ function AllocationPoolCard({
             </div>
           </div>
 
-          <MoneyStat label="Things to buy" value={allocated} />
+          <MoneyStat label="Allocated" value={allocated} />
           <MoneyStat
-            label="Left over"
+            label="Unallocated"
             value={unallocated}
             isNegative={unallocated < 0}
           />
+          <MoneyStat label="Sum of targets" value={targetTotal} />
         </div>
 
         <ProgressBar
