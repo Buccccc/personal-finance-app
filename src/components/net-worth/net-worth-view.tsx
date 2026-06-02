@@ -72,7 +72,7 @@ const headlineCards = [
   { label: "Net Worth", key: "netWorth" },
   { label: "Total Assets", key: "assets" },
   { label: "Total Liabilities", key: "liabilities" },
-  { label: "Liquidity Ratio", key: "liquidityRatio" },
+  { label: "Liquid Worth", key: "liquidAssets" },
 ] as const;
 
 const netWorthKindItems: Record<NetWorthKind, string> = {
@@ -242,12 +242,12 @@ function HeadlineCards({
                   values[card.key]
                 )}
               </CardTitle>
-              {card.key === "netWorth" && (
+              {card.key === "liquidAssets" && (
                 <p className="tabular text-xs text-muted-foreground">
                   {isLoading ? (
                     <Skeleton className="h-4 w-24" />
                   ) : (
-                    `Liquid ${values.liquidAssets}`
+                    `Liquidity ${values.liquidityRatio}`
                   )}
                 </p>
               )}
