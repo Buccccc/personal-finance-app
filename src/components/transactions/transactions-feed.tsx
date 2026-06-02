@@ -803,6 +803,20 @@ function TransactionFilters({
   const categoryOptions = categories.filter(
     (category) => category.parent_id === null,
   );
+  const accountFilterItems = {
+    all: "All accounts",
+    ...Object.fromEntries(accounts.map((a) => [a.id, a.name])),
+  };
+  const typeFilterItems = {
+    all: "All types",
+    ...Object.fromEntries(
+      transactionTypes.map((t) => [t, displayTransactionType(t)]),
+    ),
+  };
+  const categoryFilterItems = {
+    all: "All categories",
+    ...Object.fromEntries(categoryOptions.map((c) => [c.id, c.name])),
+  };
 
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(180px,1fr)_180px_160px_180px]">
@@ -813,6 +827,7 @@ function TransactionFilters({
       />
 
       <Select
+        items={accountFilterItems}
         value={accountFilter}
         onValueChange={(value) => onAccountFilterChange(value ?? "all")}
       >
@@ -830,6 +845,7 @@ function TransactionFilters({
       </Select>
 
       <Select
+        items={typeFilterItems}
         value={typeFilter}
         onValueChange={(value) => onTypeFilterChange(value ?? "all")}
       >
@@ -847,6 +863,7 @@ function TransactionFilters({
       </Select>
 
       <Select
+        items={categoryFilterItems}
         value={categoryFilter}
         onValueChange={(value) => onCategoryFilterChange(value ?? "all")}
       >
@@ -927,9 +944,12 @@ function QuickCategorySelect({
         onChange(nextValue === unselectedValue ? null : (nextValue ?? null))
       }
       disabled={isSaving}
-      items={Object.fromEntries(
-        displayOptions.map((category) => [category.id, category.name]),
-      )}
+      items={{
+        [unselectedValue]: "Uncategorised",
+        ...Object.fromEntries(
+          displayOptions.map((category) => [category.id, category.name]),
+        ),
+      }}
     >
       <SelectTrigger size="sm" className="w-[150px]">
         <SelectValue placeholder="Uncategorised" />
@@ -989,6 +1009,20 @@ function TransactionFormDialog({
     await onSubmit(form);
   };
 
+  // value->label maps so base-ui Select triggers show names, not raw ids.
+  const accountItems = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
+  const typeItems = Object.fromEntries(
+    transactionTypes.map((t) => [t, displayTransactionType(t)]),
+  );
+  const categoryItems = {
+    [unselectedValue]: "Uncategorised",
+    ...Object.fromEntries(categoryOptions.map((c) => [c.id, c.name])),
+  };
+  const subcategoryItems = {
+    [unselectedValue]: "None",
+    ...Object.fromEntries(subcategoryOptions.map((c) => [c.id, c.name])),
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90svh] overflow-x-hidden overflow-y-auto sm:max-w-2xl">
@@ -1006,6 +1040,7 @@ function TransactionFormDialog({
             <div className="space-y-2">
               <Label>Account</Label>
               <Select
+                items={accountItems}
                 value={form.accountId}
                 onValueChange={(value) =>
                   setForm((current) => ({ ...current, accountId: value ?? "" }))
@@ -1078,6 +1113,7 @@ function TransactionFormDialog({
             <div className="space-y-2">
               <Label>Type</Label>
               <Select
+                items={typeItems}
                 value={form.type}
                 onValueChange={(value) =>
                   setForm((current) => ({
@@ -1104,6 +1140,7 @@ function TransactionFormDialog({
             <div className="space-y-2">
               <Label>Category</Label>
               <Select
+                items={categoryItems}
                 value={form.categoryId || unselectedValue}
                 onValueChange={(value) =>
                   setForm((current) => ({
@@ -1130,6 +1167,7 @@ function TransactionFormDialog({
             <div className="space-y-2">
               <Label>Subcategory</Label>
               <Select
+                items={subcategoryItems}
                 value={form.subcategoryId || unselectedValue}
                 onValueChange={(value) =>
                   setForm((current) => ({
