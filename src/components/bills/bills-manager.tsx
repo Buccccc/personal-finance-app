@@ -312,7 +312,17 @@ export function BillsManager() {
         </Card>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,1.3fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(420px,1.3fr)_minmax(0,1fr)]">
+        <BillsCalendar
+          items={recurringItems.data ?? []}
+          visibleMonth={visibleMonth}
+          onPreviousMonth={() =>
+            setVisibleMonth((current) => addMonths(current, -1))
+          }
+          onNextMonth={() => setVisibleMonth((current) => addMonths(current, 1))}
+          isLoading={isLoading}
+        />
+
         <RecurringItemsList
           items={recurringItems.data ?? []}
           accountMap={accountMap}
@@ -323,16 +333,6 @@ export function BillsManager() {
           onEdit={openEditDialog}
           onDelete={setDeletingItem}
           onActiveChange={handleActiveChange}
-        />
-
-        <BillsCalendar
-          items={recurringItems.data ?? []}
-          visibleMonth={visibleMonth}
-          onPreviousMonth={() =>
-            setVisibleMonth((current) => addMonths(current, -1))
-          }
-          onNextMonth={() => setVisibleMonth((current) => addMonths(current, 1))}
-          isLoading={isLoading}
         />
       </div>
 
@@ -594,10 +594,11 @@ function BillsCalendar({
             <CalendarSkeleton />
           ) : (
             <div className="overflow-hidden rounded-xl border">
-              <div className="grid grid-cols-7 border-b bg-muted/40 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-7 border-b bg-muted/40 text-[10px] font-medium text-muted-foreground sm:text-xs">
                 {weekDays.map((day) => (
-                  <div key={day} className="px-2 py-2 text-center">
-                    {day}
+                  <div key={day} className="px-1 py-2 text-center">
+                    <span className="sm:hidden">{day.slice(0, 1)}</span>
+                    <span className="hidden sm:inline">{day}</span>
                   </div>
                 ))}
               </div>
@@ -611,15 +612,17 @@ function BillsCalendar({
                   return (
                     <div
                       key={dateKey}
-                      className={`min-h-28 border-r border-b p-2 text-sm last:border-r-0 ${
+                      className={`min-h-14 border-r border-b p-1 text-sm last:border-r-0 sm:min-h-28 sm:p-2 ${
                         isCurrentMonth ? "bg-background" : "bg-muted/20 text-muted-foreground"
                       }`}
                     >
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <span className="font-medium">{formatDateKey(day, "d")}</span>
+                      <div className="flex items-center justify-between gap-1 sm:mb-2">
+                        <span className="text-xs font-medium sm:text-sm">
+                          {formatDateKey(day, "d")}
+                        </span>
                         {dayOccurrences.length > 0 && (
                           <span
-                            className={`tabular text-xs font-medium ${
+                            className={`hidden tabular text-xs font-medium sm:inline ${
                               dayTotal >= 0
                                 ? "text-emerald-700 dark:text-emerald-300"
                                 : "text-red-700 dark:text-red-300"
@@ -629,7 +632,25 @@ function BillsCalendar({
                           </span>
                         )}
                       </div>
-                      <div className="space-y-1">
+
+                      {/* Mobile: compact coloured dots (green in / red out) */}
+                      {dayOccurrences.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-0.5 sm:hidden">
+                          {dayOccurrences.slice(0, 5).map((occurrence) => (
+                            <span
+                              key={occurrence.id}
+                              className={`h-1.5 w-1.5 rounded-full ${
+                                occurrence.item.direction === "in"
+                                  ? "bg-emerald-500"
+                                  : "bg-red-500"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      )}
+
+                      {/* sm+: full chips */}
+                      <div className="hidden space-y-1 sm:block">
                         {dayOccurrences.map((occurrence) => (
                           <div
                             key={occurrence.id}
