@@ -668,6 +668,9 @@ function PoolFormDialog({
 }) {
   const [form, setForm] = useState<PoolFormState>(emptyPoolForm);
   const [wasOpen, setWasOpen] = useState(false);
+  const sourceItems = Object.fromEntries(
+    allocationSources.map((source) => [source, formatAllocationSource(source)]),
+  );
 
   if (open !== wasOpen) {
     setWasOpen(open);
@@ -706,6 +709,7 @@ function PoolFormDialog({
           <div className="space-y-2">
             <Label>Source</Label>
             <Select
+              items={sourceItems}
               value={form.source}
               onValueChange={(value) =>
                 setForm((current) => ({

@@ -124,6 +124,12 @@ export function RulesManager() {
     () => new Map((merchants.data ?? []).map((merchant) => [merchant.id, merchant])),
     [merchants.data],
   );
+  const runScopeItems = Object.fromEntries(
+    runRuleScopes.map((scope) => [
+      scope,
+      scope === "uncategorised" ? "Uncategorised only" : "All transactions",
+    ]),
+  );
 
   const isLoading =
     rules.isLoading ||
@@ -152,6 +158,7 @@ export function RulesManager() {
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Select
+            items={runScopeItems}
             value={runScope}
             onValueChange={(value) => {
               if (isRunRuleScope(value)) setRunScope(value);
@@ -405,6 +412,34 @@ function RuleDialog({
     form.matchType === "description_contains" || form.matchType === "combo";
   const showAmount = form.matchType === "amount" || form.matchType === "combo";
   const showMerchant = form.matchType === "merchant" || form.matchType === "combo";
+  const matchTypeItems = Object.fromEntries(
+    ruleMatchTypes.map((matchType) => [matchType, formatMatchType(matchType)]),
+  );
+  const merchantItems = {
+    [unselectedValue]: form.matchType === "combo" ? "Any merchant" : "Choose merchant",
+    ...Object.fromEntries(
+      merchants.map((merchant) => [merchant.id, merchant.name]),
+    ),
+  };
+  const categoryItems = {
+    [unselectedValue]: "Leave category",
+    ...Object.fromEntries(
+      categoryLookup.parentCategories.map((category) => [
+        category.id,
+        category.name,
+      ]),
+    ),
+  };
+  const subcategoryItems = {
+    [unselectedValue]: "Leave subcategory",
+    ...Object.fromEntries(
+      subcategoryOptions.map((subcategory) => [subcategory.id, subcategory.name]),
+    ),
+  };
+  const taxModeItems = {
+    none: "Leave unchanged",
+    "true": "Set true",
+  };
 
   if (open !== wasOpen) {
     setWasOpen(open);
@@ -451,6 +486,7 @@ function RuleDialog({
             <div className="space-y-2">
               <Label>Match type</Label>
               <Select
+                items={matchTypeItems}
                 value={form.matchType}
                 onValueChange={(value) => {
                   if (!isRuleMatchType(value)) return;
@@ -497,6 +533,7 @@ function RuleDialog({
             <div className="space-y-2">
               <Label>Merchant</Label>
               <Select
+                items={merchantItems}
                 value={form.merchantId || unselectedValue}
                 onValueChange={(value) =>
                   setForm((current) => ({
@@ -577,6 +614,7 @@ function RuleDialog({
             <div className="space-y-2">
               <Label>Category</Label>
               <Select
+                items={categoryItems}
                 value={form.categoryId || unselectedValue}
                 onValueChange={(value) =>
                   setForm((current) => ({
@@ -603,6 +641,7 @@ function RuleDialog({
             <div className="space-y-2">
               <Label>Subcategory</Label>
               <Select
+                items={subcategoryItems}
                 value={form.subcategoryId || unselectedValue}
                 onValueChange={(value) =>
                   setForm((current) => ({
@@ -629,6 +668,7 @@ function RuleDialog({
             <div className="space-y-2">
               <Label>Tax deductible</Label>
               <Select
+                items={taxModeItems}
                 value={form.taxMode}
                 onValueChange={(value) =>
                   setForm((current) => ({
@@ -861,6 +901,15 @@ function MerchantDialog({
   );
   const [wasOpen, setWasOpen] = useState(open);
   const isSaving = createMerchant.isPending || updateMerchant.isPending;
+  const defaultCategoryItems = {
+    [unselectedValue]: "No default category",
+    ...Object.fromEntries(
+      categoryLookup.parentCategories.map((category) => [
+        category.id,
+        category.name,
+      ]),
+    ),
+  };
 
   if (open !== wasOpen) {
     setWasOpen(open);
@@ -917,6 +966,7 @@ function MerchantDialog({
           <div className="space-y-2">
             <Label>Default category</Label>
             <Select
+              items={defaultCategoryItems}
               value={form.defaultCategoryId || unselectedValue}
               onValueChange={(value) =>
                 setForm((current) => ({

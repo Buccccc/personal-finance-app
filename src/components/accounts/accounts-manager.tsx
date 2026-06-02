@@ -261,6 +261,9 @@ function AccountFormDialog({
 }) {
   const [form, setForm] = useState<AccountFormState>(emptyAccountForm);
   const [wasOpen, setWasOpen] = useState(false);
+  const accountTypeItems = Object.fromEntries(
+    accountTypes.map((type) => [type, formatAccountType(type)]),
+  );
 
   // Reset the form when the dialog opens — adjust state during render
   // (React-endorsed alternative to setState-in-effect).
@@ -302,6 +305,7 @@ function AccountFormDialog({
             <div className="space-y-2">
               <Label>Type</Label>
               <Select
+                items={accountTypeItems}
                 value={form.type}
                 onValueChange={(value) =>
                   setForm((current) => ({

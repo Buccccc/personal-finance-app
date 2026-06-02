@@ -711,6 +711,15 @@ function BillFormDialog({
 }) {
   const [form, setForm] = useState<BillFormState>(emptyBillForm);
   const [wasOpen, setWasOpen] = useState(false);
+  const directionItems = Object.fromEntries(
+    recurringDirections.map((direction) => [direction, displayDirection(direction)]),
+  );
+  const frequencyItems = Object.fromEntries(
+    recurringFrequencies.map((frequency) => [
+      frequency,
+      formatRecurringFrequency(frequency),
+    ]),
+  );
 
   if (open !== wasOpen) {
     setWasOpen(open);
@@ -770,6 +779,7 @@ function BillFormDialog({
             <div className="space-y-2">
               <Label>Direction</Label>
               <Select
+                items={directionItems}
                 value={form.direction}
                 onValueChange={(value) =>
                   setForm((current) => ({
@@ -794,6 +804,7 @@ function BillFormDialog({
             <div className="space-y-2">
               <Label>Frequency</Label>
               <Select
+                items={frequencyItems}
                 value={form.frequency}
                 onValueChange={(value) =>
                   setForm((current) => ({
@@ -893,10 +904,16 @@ function OptionalSelect({
   noneLabel: string;
   onChange: (value: string) => void;
 }) {
+  const optionItems = {
+    [unselectedValue]: noneLabel,
+    ...Object.fromEntries(options.map((option) => [option.id, option.name])),
+  };
+
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
       <Select
+        items={optionItems}
         value={value || unselectedValue}
         onValueChange={(nextValue) =>
           onChange(nextValue === unselectedValue ? "" : (nextValue ?? ""))

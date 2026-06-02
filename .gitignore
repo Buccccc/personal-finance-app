@@ -40,9 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-Personal Finance - Assets_Liabilities.csv
-Personal Finance - Transactions.csv
-
 PROGRESS.md
 # generated import SQL (contains personal data)
 /scripts/out/
+
+# never commit financial CSV exports (bank data)
+*.csv

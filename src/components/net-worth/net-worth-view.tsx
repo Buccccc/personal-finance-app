@@ -75,6 +75,11 @@ const headlineCards = [
   { label: "Liquidity Ratio", key: "liquidityRatio" },
 ] as const;
 
+const netWorthKindItems: Record<NetWorthKind, string> = {
+  asset: "Asset",
+  liability: "Liability",
+};
+
 function getTodayDateInputValue(): string {
   const today = new Date();
   const year = today.getFullYear();
@@ -465,6 +470,7 @@ function ClassEditorRow({
         <div className="space-y-2">
           <Label>Kind</Label>
           <Select
+            items={netWorthKindItems}
             value={kind}
             onValueChange={(value) =>
               setKind(value === "liability" ? "liability" : "asset")
@@ -568,6 +574,7 @@ function AddClassForm() {
         <div className="space-y-2">
           <Label>Kind</Label>
           <Select
+            items={netWorthKindItems}
             value={kind}
             onValueChange={(value) =>
               setKind(value === "liability" ? "liability" : "asset")
@@ -762,6 +769,15 @@ function AddItemDialog({
   const availableClasses = defaultKind
     ? classes.filter((networthClass) => networthClass.kind === defaultKind)
     : classes;
+  const classItems = {
+    "": "Choose a class",
+    ...Object.fromEntries(
+      availableClasses.map((networthClass) => [
+        networthClass.id,
+        `${displayClassName(networthClass.name)} · ${networthClass.kind}`,
+      ]),
+    ),
+  };
 
   function resetForm() {
     setName("");
@@ -816,6 +832,7 @@ function AddItemDialog({
           <div className="space-y-2">
             <Label>Class</Label>
             <Select
+              items={classItems}
               value={classId}
               onValueChange={(value) => setClassId(value ?? "")}
             >
