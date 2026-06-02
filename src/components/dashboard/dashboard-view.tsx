@@ -82,6 +82,11 @@ function hasMoneyValue(value: number | null | undefined): value is number {
   return value !== null && value !== undefined;
 }
 
+function shortMonth(key: string): string {
+  const d = new Date(`${key.slice(0, 7)}-01T00:00:00`);
+  return d.toLocaleDateString("en-AU", { month: "short", year: "numeric" });
+}
+
 function buildMonthOptions(): MonthOption[] {
   const options: MonthOption[] = [];
   const cursor = new Date();
@@ -131,6 +136,11 @@ export function DashboardView() {
   const isCurrent = offset === 0;
   const isLast = offset === -1;
   const monthOptions = useMemo(() => buildMonthOptions(), []);
+  // value -> "Mmm yyyy" label so the base-ui Select trigger shows the name.
+  const monthItems = useMemo(
+    () => Object.fromEntries(monthOptions.map((m) => [m.key, shortMonth(m.key)])),
+    [monthOptions],
+  );
   const earliestMonthKey = monthOptions.at(-1)?.key ?? monthKey;
   const earliestOffset = getMonthOffset(earliestMonthKey);
   const isEarliest = monthKey === earliestMonthKey;
@@ -185,15 +195,16 @@ export function DashboardView() {
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <Select
+          items={monthItems}
           value={monthKey}
           onValueChange={(value) => setOffset(getMonthOffset(value ?? monthKey))}
         >
           <SelectTrigger
             aria-label="Select dashboard month"
-            className="h-auto min-w-40 border-0 bg-transparent px-3 py-1 text-center shadow-none hover:bg-accent"
+            className="h-auto min-w-40 justify-center border-0 bg-transparent px-3 py-1 text-center shadow-none hover:bg-accent [&>svg]:hidden"
           >
-            <div className="flex min-w-0 flex-col items-center">
-              <SelectValue className="justify-center font-heading text-sm font-semibold" />
+            <div className="flex w-full flex-col items-center">
+              <SelectValue className="justify-center text-center font-heading text-sm font-semibold" />
               <span className="text-xs text-muted-foreground">
                 {isCurrent ? "Month to date" : "Full month"}
               </span>
@@ -202,7 +213,7 @@ export function DashboardView() {
           <SelectContent className="max-h-72">
             {monthOptions.map((month) => (
               <SelectItem key={month.key} value={month.key}>
-                {month.label}
+                {shortMonth(month.key)}
               </SelectItem>
             ))}
           </SelectContent>
