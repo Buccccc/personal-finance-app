@@ -599,12 +599,18 @@ function MetricTrendCard({
     filterYear !== null
       ? allPoints.filter((point) => point.year === filterYear)
       : allPoints;
-  // MoM plots the month-over-month difference, not the raw value.
-  const isMom = slice.key === "mom";
+  // MoM and YoY-by-month plot the difference (delta), not the raw value.
+  const plotsDelta = slice.key === "mom" || slice.key === "yoyMonth";
   const chartData: TrendChartData[] = points.map((point) => ({
     month: point.axisLabel,
-    [metric.label]: isMom ? point.change : point.value,
+    [metric.label]: plotsDelta ? point.change : point.value,
   }));
+  const description =
+    slice.key === "mom"
+      ? "Change vs the previous month."
+      : slice.key === "yoyMonth"
+        ? "Change vs the same month last year."
+        : metric.description;
 
   return (
     <motion.div
@@ -616,12 +622,10 @@ function MetricTrendCard({
       <Card className="h-full min-w-0 lift">
         <CardHeader>
           <CardTitle>{metric.label}</CardTitle>
-          <CardDescription>
-            {isMom ? "Change vs the previous month." : metric.description}
-          </CardDescription>
+          <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent className="min-w-0 space-y-4">
-          <TrendChart metric={metric} data={chartData} momDelta={isMom} />
+          <TrendChart metric={metric} data={chartData} momDelta={plotsDelta} />
           <TrendTable points={points} metric={metric} />
         </CardContent>
       </Card>
