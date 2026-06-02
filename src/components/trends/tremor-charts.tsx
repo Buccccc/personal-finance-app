@@ -95,7 +95,7 @@ function ChartShell({
   children: ReactNode;
 }) {
   return (
-    <div className={cn("h-72 w-full", className)}>
+    <div className={cn("h-72 w-full min-w-0 overflow-hidden", className)}>
       <ResponsiveContainer width="100%" height="100%">
         {children}
       </ResponsiveContainer>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Menu, X, LogOut, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,8 @@ import { NAV_GROUPS, isActiveHref } from "./nav-items";
 export function MobileNav({ email }: { email?: string | null }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  // Auto-hide the bar on scroll-down, reveal on scroll-up (native app feel).
+  const [hidden, setHidden] = useState(false);
 
   // Close the drawer whenever the route changes (render-time adjustment).
   const [lastPath, setLastPath] = useState(pathname);
@@ -20,10 +22,28 @@ export function MobileNav({ email }: { email?: string | null }) {
     if (open) setOpen(false);
   }
 
+  useEffect(() => {
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (y < 12) setHidden(false);
+      else if (y > lastY + 6) setHidden(true); // scrolling down
+      else if (y < lastY - 6) setHidden(false); // scrolling up
+      lastY = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
     <>
       {/* Top app bar — mobile only */}
-      <header className="sticky top-0 z-30 flex items-center gap-3 border-b bg-card/90 px-4 pt-[env(safe-area-inset-top)] backdrop-blur md:hidden">
+      <header
+        className={cn(
+          "sticky top-0 z-30 flex items-center gap-3 border-b bg-card/90 px-4 pt-[env(safe-area-inset-top)] backdrop-blur transition-transform duration-200 md:hidden",
+          hidden && !open ? "-translate-y-full" : "translate-y-0",
+        )}
+      >
         <div className="flex h-14 w-full items-center gap-3">
           <button
             type="button"

@@ -43,6 +43,18 @@ export function getRelativeMonthKey(offsetInMonths: number): string {
   return getMonthKey(targetMonth);
 }
 
+export function getMonthOffset(monthKey: string): number {
+  const [yearPart, monthPart] = monthKey.slice(0, 7).split("-");
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return 0;
+
+  const today = new Date();
+
+  return (year - today.getFullYear()) * 12 + month - (today.getMonth() + 1);
+}
+
 async function fetchCategoryBreakdown(
   monthKey: string,
   type: CategoryBreakdownType,

@@ -1,7 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type RefObject,
+} from "react";
+import {
+  differenceInCalendarDays,
+  isValid,
+  parseISO,
+  startOfToday,
+} from "date-fns";
 import { motion } from "motion/react";
 import {
   flexRender,
@@ -105,6 +118,11 @@ type TransactionFeedRow = Transaction & {
   subcategoryName: string | null;
 };
 
+type TransactionDateGroup = {
+  date: string;
+  rows: TransactionFeedRow[];
+};
+
 const unselectedValue = "none";
 
 function todayIsoDate() {
@@ -166,6 +184,38 @@ function categoryById(categories: Category[]) {
 
 function merchantById(merchants: Merchant[]) {
   return new Map(merchants.map((merchant) => [merchant.id, merchant]));
+}
+
+function groupTransactionsByDate(rows: TransactionFeedRow[]) {
+  const groups = new Map<string, TransactionFeedRow[]>();
+
+  for (const row of rows) {
+    const existing = groups.get(row.date);
+    if (existing) {
+      existing.push(row);
+    } else {
+      groups.set(row.date, [row]);
+    }
+  }
+
+  return Array.from(groups, ([date, groupedRows]) => ({
+    date,
+    rows: groupedRows,
+  }));
+}
+
+function relativeDateHint(date: string) {
+  const parsedDate = parseISO(date.length <= 10 ? date : date.slice(0, 10));
+
+  if (!isValid(parsedDate)) return "";
+
+  const daysAgo = differenceInCalendarDays(startOfToday(), parsedDate);
+
+  if (daysAgo === 0) return "Today";
+  if (daysAgo === 1) return "Yesterday";
+  if (daysAgo > 1) return `${daysAgo} days ago`;
+  if (daysAgo === -1) return "Tomorrow";
+  return `In ${Math.abs(daysAgo)} days`;
 }
 
 function useDebouncedValue(value: string, delayMs: number) {
@@ -260,6 +310,7 @@ export function TransactionsFeed() {
       };
     });
   }, [accountMap, categoryMap, loadedTransactions, merchantMap]);
+  const mobileGroups = useMemo(() => groupTransactionsByDate(rows), [rows]);
 
   const columns = useMemo<ColumnDef<TransactionFeedRow>[]>(
     () => [
@@ -454,18 +505,19 @@ export function TransactionsFeed() {
     categoryFilter !== "all";
   const shouldShowEmptyState =
     !hasActiveFilters && !transactions.isLoading && totalTransactions === 0;
+  const mobileLoadMoreRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const loadMoreNode = loadMoreRef.current;
+    const loadMoreNodes = [loadMoreRef.current, mobileLoadMoreRef.current].filter(
+      (node): node is HTMLTableRowElement | HTMLDivElement => node !== null,
+    );
 
-    if (!loadMoreNode) return;
+    if (loadMoreNodes.length === 0) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        const firstEntry = entries[0];
-
         if (
-          firstEntry?.isIntersecting &&
+          entries.some((entry) => entry.isIntersecting) &&
           hasNextPage &&
           !isFetchingNextPage
         ) {
@@ -475,7 +527,9 @@ export function TransactionsFeed() {
       { rootMargin: "240px" },
     );
 
-    observer.observe(loadMoreNode);
+    for (const loadMoreNode of loadMoreNodes) {
+      observer.observe(loadMoreNode);
+    }
 
     return () => observer.disconnect();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
@@ -567,69 +621,85 @@ export function TransactionsFeed() {
               </div>
 
               {isLoading ? (
-                <TransactionsSkeleton />
+                <>
+                  <div className="md:hidden">
+                    <MobileTransactionsSkeleton />
+                  </div>
+                  <div className="hidden md:block">
+                    <TransactionsSkeleton />
+                  </div>
+                </>
               ) : shouldShowEmptyState ? (
                 <EmptyTransactionsState onAdd={openCreateDialog} />
               ) : hasLoadedTransactions || hasActiveFilters ? (
-                <div className="-mx-4 overflow-x-auto sm:mx-0">
-                  <div className="min-w-[760px] px-4 sm:min-w-0 sm:px-0">
-                <Table>
-                  <TableHeader>
-                    {table.getHeaderGroups().map((headerGroup) => (
-                      <TableRow key={headerGroup.id}>
-                        {headerGroup.headers.map((header) => (
-                          <TableHead key={header.id}>
-                            {header.isPlaceholder
-                              ? null
-                              : flexRender(
-                                  header.column.columnDef.header,
-                                  header.getContext(),
-                                )}
-                          </TableHead>
-                        ))}
-                      </TableRow>
-                    ))}
-                  </TableHeader>
-                  <TableBody>
-                    {table.getRowModel().rows.length > 0 ? (
-                      table.getRowModel().rows.map((row) => (
-                        <TableRow key={row.id}>
-                          {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id}>
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext(),
-                              )}
-                            </TableCell>
+                <>
+                  <MobileTransactionsList
+                    groups={mobileGroups}
+                    hasNextPage={hasNextPage}
+                    isFetchingNextPage={isFetchingNextPage}
+                    loadMoreRef={mobileLoadMoreRef}
+                    onEdit={openEditDialog}
+                  />
+                  <div className="-mx-4 hidden overflow-x-auto sm:mx-0 md:block">
+                    <div className="min-w-[760px] px-4 sm:min-w-0 sm:px-0">
+                      <Table>
+                        <TableHeader>
+                          {table.getHeaderGroups().map((headerGroup) => (
+                            <TableRow key={headerGroup.id}>
+                              {headerGroup.headers.map((header) => (
+                                <TableHead key={header.id}>
+                                  {header.isPlaceholder
+                                    ? null
+                                    : flexRender(
+                                        header.column.columnDef.header,
+                                        header.getContext(),
+                                      )}
+                                </TableHead>
+                              ))}
+                            </TableRow>
                           ))}
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell
-                          colSpan={columns.length}
-                          className="h-24 text-center text-muted-foreground"
-                        >
-                          No transactions match these filters.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    {hasNextPage ? (
-                      <TableRow ref={loadMoreRef}>
-                        <TableCell
-                          colSpan={columns.length}
-                          className="h-12 text-center text-muted-foreground"
-                        >
-                          {isFetchingNextPage
-                            ? "Loading more transactions..."
-                            : "Scroll to load more"}
-                        </TableCell>
-                      </TableRow>
-                    ) : null}
-                  </TableBody>
-                </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {table.getRowModel().rows.length > 0 ? (
+                            table.getRowModel().rows.map((row) => (
+                              <TableRow key={row.id}>
+                                {row.getVisibleCells().map((cell) => (
+                                  <TableCell key={cell.id}>
+                                    {flexRender(
+                                      cell.column.columnDef.cell,
+                                      cell.getContext(),
+                                    )}
+                                  </TableCell>
+                                ))}
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell
+                                colSpan={columns.length}
+                                className="h-24 text-center text-muted-foreground"
+                              >
+                                No transactions match these filters.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          {hasNextPage ? (
+                            <TableRow ref={loadMoreRef}>
+                              <TableCell
+                                colSpan={columns.length}
+                                className="h-12 text-center text-muted-foreground"
+                              >
+                                {isFetchingNextPage
+                                  ? "Loading more transactions..."
+                                  : "Scroll to load more"}
+                              </TableCell>
+                            </TableRow>
+                          ) : null}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
-                </div>
+                </>
               ) : (
                 <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
                   No transactions match these filters.
@@ -857,6 +927,9 @@ function QuickCategorySelect({
         onChange(nextValue === unselectedValue ? null : (nextValue ?? null))
       }
       disabled={isSaving}
+      items={Object.fromEntries(
+        displayOptions.map((category) => [category.id, category.name]),
+      )}
     >
       <SelectTrigger size="sm" className="w-[150px]">
         <SelectValue placeholder="Uncategorised" />
@@ -1170,6 +1243,116 @@ function DeleteTransactionDialog({
   );
 }
 
+function MobileTransactionsList({
+  groups,
+  hasNextPage,
+  isFetchingNextPage,
+  loadMoreRef,
+  onEdit,
+}: {
+  groups: TransactionDateGroup[];
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  loadMoreRef: RefObject<HTMLDivElement | null>;
+  onEdit: (transaction: Transaction) => void;
+}) {
+  if (groups.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground md:hidden">
+        No transactions match these filters.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border bg-background md:hidden">
+      {groups.map((group) => (
+        <section key={group.date}>
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-muted/95 px-4 py-2 backdrop-blur">
+            <h3 className="text-sm font-medium">{formatDate(group.date)}</h3>
+            <span className="text-xs text-muted-foreground">
+              {relativeDateHint(group.date)}
+            </span>
+          </div>
+          <div className="divide-y">
+            {group.rows.map((transaction) => (
+              <MobileTransactionRow
+                key={transaction.id}
+                transaction={transaction}
+                onEdit={onEdit}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+
+      {hasNextPage ? (
+        <div
+          ref={loadMoreRef}
+          className="border-t px-4 py-3 text-center text-xs text-muted-foreground"
+        >
+          {isFetchingNextPage
+            ? "Loading more transactions..."
+            : "Scroll to load more"}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MobileTransactionRow({
+  transaction,
+  onEdit,
+}: {
+  transaction: TransactionFeedRow;
+  onEdit: (transaction: Transaction) => void;
+}) {
+  const title =
+    transaction.merchantName || transaction.description || "No description";
+  const amountColor =
+    transaction.type === "income"
+      ? "text-emerald-600"
+      : transaction.type === "expense"
+        ? "text-red-600"
+        : "text-foreground";
+
+  return (
+    <button
+      type="button"
+      className="flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      onClick={() => onEdit(transaction)}
+    >
+      <AccountBadge
+        name={transaction.accountName}
+        institution={transaction.accountInstitution}
+        size="sm"
+        className="mt-0.5"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
+          {title}
+        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="truncate">
+            {transaction.categoryName ?? "Uncategorised"}
+          </span>
+          {transaction.tax_deductible ? (
+            <Badge
+              variant="outline"
+              className="h-4 px-1.5 text-[10px] text-muted-foreground"
+            >
+              Tax
+            </Badge>
+          ) : null}
+        </div>
+      </div>
+      <span className={`shrink-0 text-sm font-semibold tabular ${amountColor}`}>
+        {formatMoney(transaction.amount)}
+      </span>
+    </button>
+  );
+}
+
 function EmptyTransactionsState({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="rounded-xl border border-dashed p-8 text-center">
@@ -1195,6 +1378,23 @@ function TransactionsSkeleton() {
           <Skeleton className="col-span-2 h-8" />
           <Skeleton className="h-8" />
           <Skeleton className="h-8" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MobileTransactionsSkeleton() {
+  return (
+    <div className="space-y-3 rounded-xl border p-4">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div key={index} className="flex gap-3">
+          <Skeleton className="h-6 w-6 rounded-md" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+          <Skeleton className="h-4 w-16" />
         </div>
       ))}
     </div>

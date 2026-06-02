@@ -284,7 +284,7 @@ export function ReviewMode() {
         <ReviewSkeleton />
       ) : currentTransaction ? (
         <section className="flex flex-1 flex-col items-center justify-center gap-6">
-          <div className="relative h-[34rem] w-full max-w-xl">
+          <div className="relative w-full max-w-xl sm:h-[34rem]">
             {/* Opaque deck backing cards for depth (no content, no transparency). */}
             {visibleTransactions.slice(1, 3).map((transaction, index) => (
               <div
@@ -432,7 +432,7 @@ function SwipeableTransactionCard({
 
   return (
     <motion.div
-      className="absolute inset-0 z-10 touch-pan-y"
+      className="relative z-10 touch-pan-y sm:absolute sm:inset-0"
       style={{ x, rotate, opacity }}
       drag="x"
       dragConstraints={{ left: 0, right: 0 }}
@@ -447,7 +447,7 @@ function SwipeableTransactionCard({
       }}
       transition={{ type: "spring", stiffness: 280, damping: 28 }}
     >
-      <Card className="h-full shadow-xl">
+      <Card className="flex h-full flex-col shadow-xl">
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -466,7 +466,7 @@ function SwipeableTransactionCard({
           </div>
         </CardHeader>
 
-        <CardContent className="flex h-full flex-col gap-5">
+        <CardContent className="flex flex-1 flex-col gap-5">
           <div className="space-y-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Bank description

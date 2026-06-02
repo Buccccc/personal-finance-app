@@ -24,6 +24,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/app-shell/page-header";
 import {
@@ -33,15 +40,25 @@ import {
   formatRatio,
 } from "@/lib/format";
 import {
+  getMonthKey,
+  getMonthOffset,
   getRelativeMonthKey,
   useDashboardData,
+  type MonthlyCashflow,
   type MonthlyCategoryBreakdown,
+  type NetWorthCurrent,
+  type NetWorthHistory,
 } from "@/lib/hooks/dashboard";
 
 type CategoryChartItem = {
   name: string;
   value: number;
   txnCount: number;
+};
+
+type MonthOption = {
+  key: string;
+  label: string;
 };
 
 const chartColours = [
@@ -59,6 +76,31 @@ function getErrorMessage(error: unknown): string {
 
 function toMoneyNumber(value: number | null | undefined): number {
   return value ?? 0;
+}
+
+function hasMoneyValue(value: number | null | undefined): value is number {
+  return value !== null && value !== undefined;
+}
+
+function buildMonthOptions(): MonthOption[] {
+  const options: MonthOption[] = [];
+  const cursor = new Date();
+  cursor.setDate(1);
+
+  const earliestMonth = new Date(2024, 11, 1);
+
+  while (cursor >= earliestMonth) {
+    const key = getMonthKey(cursor);
+
+    options.push({
+      key,
+      label: formatMonth(key),
+    });
+
+    cursor.setMonth(cursor.getMonth() - 1);
+  }
+
+  return options;
 }
 
 function categoryRowsToChartItems(
@@ -88,6 +130,10 @@ export function DashboardView() {
   const monthLabel = formatMonth(monthKey);
   const isCurrent = offset === 0;
   const isLast = offset === -1;
+  const monthOptions = useMemo(() => buildMonthOptions(), []);
+  const earliestMonthKey = monthOptions.at(-1)?.key ?? monthKey;
+  const earliestOffset = getMonthOffset(earliestMonthKey);
+  const isEarliest = monthKey === earliestMonthKey;
 
   const expenseItems = useMemo(
     () => categoryRowsToChartItems(data?.expensesByCategory ?? []),
@@ -133,16 +179,34 @@ export function DashboardView() {
           variant="ghost"
           size="icon"
           aria-label="Previous month"
-          onClick={() => setOffset((o) => o - 1)}
+          disabled={isEarliest}
+          onClick={() => setOffset((o) => Math.max(earliestOffset, o - 1))}
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <div className="text-center">
-          <p className="font-heading text-sm font-semibold">{monthLabel}</p>
-          <p className="text-xs text-muted-foreground">
-            {isCurrent ? "Month to date" : "Full month"}
-          </p>
-        </div>
+        <Select
+          value={monthKey}
+          onValueChange={(value) => setOffset(getMonthOffset(value ?? monthKey))}
+        >
+          <SelectTrigger
+            aria-label="Select dashboard month"
+            className="h-auto min-w-40 border-0 bg-transparent px-3 py-1 text-center shadow-none hover:bg-accent"
+          >
+            <div className="flex min-w-0 flex-col items-center">
+              <SelectValue className="justify-center font-heading text-sm font-semibold" />
+              <span className="text-xs text-muted-foreground">
+                {isCurrent ? "Month to date" : "Full month"}
+              </span>
+            </div>
+          </SelectTrigger>
+          <SelectContent className="max-h-72">
+            {monthOptions.map((month) => (
+              <SelectItem key={month.key} value={month.key}>
+                {month.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button
           variant="ghost"
           size="icon"
@@ -170,6 +234,7 @@ export function DashboardView() {
         currentNetWorth={data?.currentNetWorth ?? null}
         monthEndNetWorth={data?.monthEndNetWorth ?? null}
         monthLabel={monthLabel}
+        isCurrent={isCurrent}
       />
 
       {!dashboard.isLoading && !data?.cashflow && (
@@ -207,24 +272,21 @@ function KpiGrid({
   currentNetWorth,
   monthEndNetWorth,
   monthLabel,
+  isCurrent,
 }: {
   isLoading: boolean;
-  cashflow: {
-    income: number | null;
-    expenses: number | null;
-    net_cash_flow: number | null;
-    savings_rate: number | null;
-  } | null;
-  currentNetWorth: {
-    net_worth: number | null;
-    liquid_assets: number | null;
-    liquidity_ratio: number | null;
-  } | null;
-  monthEndNetWorth: {
-    net_worth: number | null;
-  } | null;
+  cashflow: MonthlyCashflow | null;
+  currentNetWorth: NetWorthCurrent | null;
+  monthEndNetWorth: NetWorthHistory | null;
   monthLabel: string;
+  isCurrent: boolean;
 }) {
+  const selectedNetWorth = isCurrent ? currentNetWorth : monthEndNetWorth;
+  const hasSelectedNetWorth = selectedNetWorth !== null;
+  const netWorthMissingDescription = isCurrent
+    ? "No current value found"
+    : "No month-end value found";
+
   const cards = [
     {
       title: "Total income",
@@ -251,28 +313,25 @@ function KpiGrid({
       description: "Share of income kept",
     },
     {
-      title: "Net worth",
-      value: currentNetWorth
-        ? formatMoney(toMoneyNumber(currentNetWorth.net_worth))
-        : "-",
-      description: "Total assets minus liabilities",
+      title: isCurrent ? "Current net worth" : "Net worth (month-end)",
+      value: hasMoneyValue(selectedNetWorth?.net_worth)
+        ? formatMoney(selectedNetWorth.net_worth)
+        : "—",
+      description: hasSelectedNetWorth
+        ? "Total assets minus liabilities"
+        : netWorthMissingDescription,
     },
     {
-      title: "Liquid worth",
-      value: currentNetWorth
-        ? formatMoney(toMoneyNumber(currentNetWorth.liquid_assets))
-        : "-",
+      title: isCurrent ? "Current liquid worth" : "Liquid worth (month-end)",
+      value: hasMoneyValue(selectedNetWorth?.liquid_assets)
+        ? formatMoney(selectedNetWorth.liquid_assets)
+        : "—",
       description:
-        currentNetWorth?.liquidity_ratio != null
-          ? `Liquidity ${formatRatio(currentNetWorth.liquidity_ratio)}`
-          : "Cash + liquid assets",
-    },
-    {
-      title: "Month-end net worth",
-      value: monthEndNetWorth
-        ? formatMoney(toMoneyNumber(monthEndNetWorth.net_worth))
-        : "-",
-      description: monthEndNetWorth ? monthLabel : "No month-end value found",
+        selectedNetWorth?.liquidity_ratio != null
+          ? `Liquidity ${formatRatio(selectedNetWorth.liquidity_ratio)}`
+          : hasSelectedNetWorth
+            ? "Cash + liquid assets"
+            : netWorthMissingDescription,
     },
   ];
 

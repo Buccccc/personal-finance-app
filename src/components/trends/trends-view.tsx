@@ -496,7 +496,7 @@ function SeriesPanel({
               </p>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-2">
+            <div className="grid min-w-0 gap-4 xl:grid-cols-2">
               {series.metrics.map((metric, index) => (
                 <MetricTrendCard
                   key={metric.key}
@@ -536,13 +536,14 @@ function MetricTrendCard({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: index * 0.04 }}
+      className="min-w-0"
     >
-      <Card className="h-full lift">
+      <Card className="h-full min-w-0 lift">
         <CardHeader>
           <CardTitle>{metric.label}</CardTitle>
           <CardDescription>{metric.description}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="min-w-0 space-y-4">
           <TrendChart metric={metric} data={chartData} />
           <TrendTable points={points} metric={metric} slice={slice} />
         </CardContent>
@@ -581,7 +582,7 @@ function TrendTable({
   slice: SliceConfig;
 }) {
   return (
-    <div className="max-h-80 overflow-auto rounded-lg border">
+    <div className="max-h-80 overflow-auto overflow-x-auto rounded-lg border">
       <Table>
         <TableHeader>
           <TableRow>
@@ -621,14 +622,14 @@ function TrendsSkeleton() {
           <Skeleton className="h-4 w-80 max-w-full" />
         </CardHeader>
       </Card>
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-2">
         {Array.from({ length: 4 }).map((_, index) => (
-          <Card key={index}>
+          <Card key={index} className="min-w-0">
             <CardHeader>
               <Skeleton className="h-5 w-32" />
               <Skeleton className="h-4 w-56" />
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="min-w-0 space-y-4">
               <Skeleton className="h-72 w-full" />
               <div className="space-y-2">
                 <Skeleton className="h-8 w-full" />

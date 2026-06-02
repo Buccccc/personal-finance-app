@@ -71,7 +71,6 @@ import {
 const headlineCards = [
   { label: "Net Worth", key: "netWorth" },
   { label: "Total Assets", key: "assets" },
-  { label: "Liquid Worth", key: "liquidWorth" },
   { label: "Total Liabilities", key: "liabilities" },
   { label: "Liquidity Ratio", key: "liquidityRatio" },
 ] as const;
@@ -214,13 +213,13 @@ function HeadlineCards({
   const values = {
     netWorth: formatMoney(current?.net_worth ?? 0),
     assets: formatMoney(current?.assets ?? 0),
-    liquidWorth: formatMoney(current?.liquid_assets ?? 0),
+    liquidAssets: formatMoney(current?.liquid_assets ?? 0),
     liabilities: formatMoney(Math.abs(current?.liabilities ?? 0)),
     liquidityRatio: current ? formatRatio(current.liquidity_ratio) : "—",
   };
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {headlineCards.map((card, index) => (
         <motion.div
           key={card.key}
@@ -238,6 +237,15 @@ function HeadlineCards({
                   values[card.key]
                 )}
               </CardTitle>
+              {card.key === "netWorth" && (
+                <p className="tabular text-xs text-muted-foreground">
+                  {isLoading ? (
+                    <Skeleton className="h-4 w-24" />
+                  ) : (
+                    `Liquid ${values.liquidAssets}`
+                  )}
+                </p>
+              )}
             </CardHeader>
           </Card>
         </motion.div>
@@ -258,6 +266,10 @@ function ItemHistoryChart({
     [items],
   );
   const [selectedId, setSelectedId] = useState<string>("");
+  const itemsMap = useMemo<Record<string, React.ReactNode>>(
+    () => Object.fromEntries(withHistory.map((i) => [i.id, i.name])),
+    [withHistory],
+  );
 
   const selected =
     withHistory.find((i) => i.id === selectedId) ?? withHistory[0] ?? null;
@@ -287,6 +299,7 @@ function ItemHistoryChart({
             </CardDescription>
           </div>
           <Select
+            items={itemsMap}
             value={selected?.id ?? ""}
             onValueChange={(v) => setSelectedId(v ?? "")}
           >
@@ -319,7 +332,7 @@ function ItemHistoryChart({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="h-72">
+        <div className="h-72 w-full min-w-0 overflow-hidden">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={data}
