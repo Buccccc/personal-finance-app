@@ -521,7 +521,10 @@ function SeriesPanel({
         </TabsList>
 
         {sliceConfigs.map((slice) => {
-          const yearFiltered = slice.key === "ytd" || slice.key === "yoyYtd";
+          const yearFiltered =
+            slice.key === "ytd" ||
+            slice.key === "yoyYtd" ||
+            slice.key === "yoyMonth";
           return (
             <TabsContent key={slice.key} value={slice.key} className="space-y-4">
               <div className="flex flex-col gap-3 rounded-xl border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
