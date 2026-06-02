@@ -41,6 +41,8 @@ export const viewport: Viewport = {
     { media: "(prefers-color-scheme: light)", color: "#5b46e0" },
     { media: "(prefers-color-scheme: dark)", color: "#0f0f17" },
   ],
+  // Let content extend under the notch/home-indicator so safe-area insets work.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

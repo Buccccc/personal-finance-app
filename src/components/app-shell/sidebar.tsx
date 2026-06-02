@@ -3,56 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import {
-  LayoutDashboard,
-  ArrowLeftRight,
-  Wallet,
-  TrendingUp,
-  CalendarClock,
-  PiggyBank,
-  Landmark,
-  LogOut,
-  Sparkles,
-  Layers,
-  ListChecks,
-  Upload,
-} from "lucide-react";
+import { LogOut, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
-
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard };
-type NavGroup = { label: string; items: NavItem[] };
-
-const GROUPS: NavGroup[] = [
-  {
-    label: "Overview",
-    items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard }],
-  },
-  {
-    label: "Money",
-    items: [
-      { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
-      { href: "/import", label: "Import", icon: Upload },
-      { href: "/review", label: "Review", icon: ListChecks },
-      { href: "/accounts", label: "Accounts", icon: Landmark },
-      { href: "/net-worth", label: "Net Worth", icon: Wallet },
-    ],
-  },
-  {
-    label: "Insights",
-    items: [
-      { href: "/trends", label: "Trends", icon: TrendingUp },
-      { href: "/bills", label: "Bills & Calendar", icon: CalendarClock },
-    ],
-  },
-  {
-    label: "Planning",
-    items: [
-      { href: "/allocations", label: "Allocations", icon: PiggyBank },
-      { href: "/rules", label: "Rules & Merchants", icon: Layers },
-    ],
-  },
-];
+import { NAV_GROUPS, isActiveHref } from "./nav-items";
 
 export function Sidebar({ email }: { email?: string | null }) {
   const pathname = usePathname();
@@ -67,8 +21,7 @@ export function Sidebar({ email }: { email?: string | null }) {
   }
 
   const activeHref = pendingHref ?? pathname;
-  const isActive = (href: string) =>
-    href === "/" ? activeHref === "/" : activeHref.startsWith(href);
+  const isActive = (href: string) => isActiveHref(activeHref, href);
 
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-card md:flex">
@@ -85,7 +38,7 @@ export function Sidebar({ email }: { email?: string | null }) {
       </div>
 
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4">
-        {GROUPS.map((group) => (
+        {NAV_GROUPS.map((group) => (
           <div key={group.label} className="space-y-1">
             <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
               {group.label}

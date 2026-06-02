@@ -571,6 +571,8 @@ export function TransactionsFeed() {
               ) : shouldShowEmptyState ? (
                 <EmptyTransactionsState onAdd={openCreateDialog} />
               ) : hasLoadedTransactions || hasActiveFilters ? (
+                <div className="-mx-4 overflow-x-auto sm:mx-0">
+                  <div className="min-w-[760px] px-4 sm:min-w-0 sm:px-0">
                 <Table>
                   <TableHeader>
                     {table.getHeaderGroups().map((headerGroup) => (
@@ -626,6 +628,8 @@ export function TransactionsFeed() {
                     ) : null}
                   </TableBody>
                 </Table>
+                  </div>
+                </div>
               ) : (
                 <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
                   No transactions match these filters.
