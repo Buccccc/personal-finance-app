@@ -424,10 +424,14 @@ function NetWorthColumn({
   isLoading: boolean;
   emptyText: string;
 }) {
-  const total = items.reduce(
-    (sum, item) => sum + Math.abs(Number(item.latestEntry?.value ?? 0)),
-    0,
-  );
+  const slices = items
+    .map((item) => ({
+      name: item.name,
+      value: Math.abs(Number(item.latestEntry?.value ?? 0)),
+    }))
+    .filter((slice) => slice.value > 0)
+    .sort((a, b) => b.value - a.value);
+  const total = slices.reduce((sum, slice) => sum + slice.value, 0);
 
   return (
     <Card className="lift">
@@ -450,18 +454,57 @@ function NetWorthColumn({
         ) : items.length === 0 ? (
           <p className="text-sm text-muted-foreground">{emptyText}</p>
         ) : (
-          <div className="divide-y">
-            {items.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between gap-3 py-2 text-sm"
-              >
-                <span className="min-w-0 truncate">{item.name}</span>
-                <span className="tabular shrink-0 font-medium">
-                  {formatMoney(Math.abs(Number(item.latestEntry?.value ?? 0)))}
-                </span>
+          <div className="space-y-4">
+            {slices.length > 0 && (
+              <div className="h-44">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={slices}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius="58%"
+                      outerRadius="82%"
+                      paddingAngle={2}
+                      strokeWidth={2}
+                    >
+                      {slices.map((slice, index) => (
+                        <Cell
+                          key={slice.name}
+                          fill={chartColours[index % chartColours.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      cursor={false}
+                      formatter={(value) => formatMoney(Number(value))}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-            ))}
+            )}
+            <div className="divide-y">
+              {slices.map((slice, index) => (
+                <div
+                  key={slice.name}
+                  className="flex items-center justify-between gap-3 py-2 text-sm"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{
+                        backgroundColor:
+                          chartColours[index % chartColours.length],
+                      }}
+                    />
+                    <span className="truncate">{slice.name}</span>
+                  </div>
+                  <span className="tabular shrink-0 font-medium">
+                    {formatMoney(slice.value)}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </CardContent>
