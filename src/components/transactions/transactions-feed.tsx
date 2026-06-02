@@ -717,17 +717,27 @@ export function TransactionsFeed() {
         accounts={accounts.data ?? []}
         categories={categories.data ?? []}
         onSubmit={async (form) => {
-          const amount = Number(form.amount);
+          const rawAmount = Number(form.amount);
 
           if (!form.accountId) {
             toast.error("Account is required");
             return;
           }
 
-          if (!Number.isFinite(amount)) {
+          if (!Number.isFinite(rawAmount)) {
             toast.error("Amount must be a number");
             return;
           }
+
+          // Normalise sign by type: expenses are always negative, income
+          // always positive. Transfers keep whatever sign was entered.
+          const magnitude = Math.abs(rawAmount);
+          const amount =
+            form.type === "expense"
+              ? -magnitude
+              : form.type === "income"
+                ? magnitude
+                : rawAmount;
 
           const transaction = {
             account_id: form.accountId,
@@ -1106,6 +1116,13 @@ function TransactionFormDialog({
                 placeholder="0.00"
                 required
               />
+              <p className="text-xs text-muted-foreground">
+                {form.type === "expense"
+                  ? "Saved as a negative amount."
+                  : form.type === "income"
+                    ? "Saved as a positive amount."
+                    : "Enter a signed amount."}
+              </p>
             </div>
           </div>
 
