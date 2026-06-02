@@ -260,11 +260,6 @@ export function DashboardView() {
         />
       )}
 
-      <NetWorthBreakdown
-        items={netWorthItems.data ?? []}
-        isLoading={netWorthItems.isLoading}
-      />
-
       <div className="grid gap-4 xl:grid-cols-2">
         <CategoryBreakdownCard
           title="Expenses by category"
@@ -283,6 +278,12 @@ export function DashboardView() {
           isLoading={dashboard.isLoading}
         />
       </div>
+
+      <NetWorthBreakdown
+        items={netWorthItems.data ?? []}
+        monthKey={monthKey}
+        isLoading={netWorthItems.isLoading}
+      />
     </div>
   );
 }
@@ -380,34 +381,62 @@ function KpiGrid({
   );
 }
 
+function monthEndIso(monthKey: string): string {
+  const ym = monthKey.slice(0, 7);
+  const [year, month] = ym.split("-").map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+  return `${ym}-${String(lastDay).padStart(2, "0")}`;
+}
+
+// An item's value as of the given month-end (latest dated entry on/before it).
+function valueAsOf(
+  item: NetWorthItemWithValues,
+  monthEnd: string,
+): number | null {
+  const entry = item.entries.find((e) => e.date <= monthEnd);
+  return entry ? Number(entry.value) : null;
+}
+
 function NetWorthBreakdown({
   items,
+  monthKey,
   isLoading,
 }: {
   items: NetWorthItemWithValues[];
+  monthKey: string;
   isLoading: boolean;
 }) {
-  const active = items.filter((item) => item.active);
-  const assets = active.filter((item) => item.networthClass.kind === "asset");
-  const liabilities = active.filter(
-    (item) => item.networthClass.kind === "liability",
-  );
+  const monthEnd = monthEndIso(monthKey);
 
-  if (!isLoading && active.length === 0) return null;
+  const toSlices = (kind: "asset" | "liability") =>
+    items
+      .filter((item) => item.networthClass.kind === kind)
+      .map((item) => ({
+        name: item.name,
+        value: Math.abs(valueAsOf(item, monthEnd) ?? 0),
+      }))
+      .filter((slice) => slice.value > 0)
+      .sort((a, b) => b.value - a.value);
+
+  const assets = toSlices("asset");
+  const liabilities = toSlices("liability");
+
+  if (!isLoading && assets.length === 0 && liabilities.length === 0)
+    return null;
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <NetWorthColumn
         title="Assets"
-        items={assets}
+        slices={assets}
         isLoading={isLoading}
-        emptyText="No assets recorded."
+        emptyText="No assets recorded for this month."
       />
       <NetWorthColumn
         title="Liabilities"
-        items={liabilities}
+        slices={liabilities}
         isLoading={isLoading}
-        emptyText="No liabilities recorded."
+        emptyText="No liabilities recorded for this month."
       />
     </div>
   );
@@ -415,22 +444,15 @@ function NetWorthBreakdown({
 
 function NetWorthColumn({
   title,
-  items,
+  slices,
   isLoading,
   emptyText,
 }: {
   title: string;
-  items: NetWorthItemWithValues[];
+  slices: { name: string; value: number }[];
   isLoading: boolean;
   emptyText: string;
 }) {
-  const slices = items
-    .map((item) => ({
-      name: item.name,
-      value: Math.abs(Number(item.latestEntry?.value ?? 0)),
-    }))
-    .filter((slice) => slice.value > 0)
-    .sort((a, b) => b.value - a.value);
   const total = slices.reduce((sum, slice) => sum + slice.value, 0);
 
   return (
@@ -442,7 +464,7 @@ function NetWorthColumn({
             {isLoading ? "" : formatMoney(total)}
           </span>
         </div>
-        <CardDescription>Latest recorded values.</CardDescription>
+        <CardDescription>Value as at the selected month-end.</CardDescription>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -451,7 +473,7 @@ function NetWorthColumn({
             <Skeleton className="h-8 w-11/12" />
             <Skeleton className="h-8 w-10/12" />
           </div>
-        ) : items.length === 0 ? (
+        ) : slices.length === 0 ? (
           <p className="text-sm text-muted-foreground">{emptyText}</p>
         ) : (
           <div className="space-y-4">

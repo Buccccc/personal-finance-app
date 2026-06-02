@@ -1,0 +1,3 @@
+-- Liquidity ratio = liquid assets / TOTAL liabilities (defined for every month,
+-- even with no short-term/current liabilities). See 0017 applied via MCP for
+-- the full view bodies.

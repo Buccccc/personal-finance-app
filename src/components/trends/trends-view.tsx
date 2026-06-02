@@ -38,7 +38,7 @@ import { AreaChart, BarChart, LineChart } from "./tremor-charts";
 import type { TrendChartData } from "./tremor-charts";
 
 type SeriesKey = "cashflow" | "netWorth";
-type SliceKey = "mom" | "ytd" | "yoyMonth" | "yoyYtd";
+type SliceKey = "monthly" | "mom" | "ytd" | "yoyMonth" | "yoyYtd";
 type ChartKind = "line" | "bar" | "area";
 type FormatKind = "money" | "percent" | "ratio";
 type AggregateKind = "sum" | "point" | "cashflowSavingsRate";
@@ -175,6 +175,12 @@ const seriesConfigs: SeriesConfig[] = [
 ];
 
 const sliceConfigs: SliceConfig[] = [
+  {
+    key: "monthly",
+    label: "Monthly",
+    description: "Each month's actual value over time.",
+    comparisonLabel: "Previous month",
+  },
   {
     key: "mom",
     label: "MoM",
@@ -505,7 +511,7 @@ function SeriesPanel({
         </CardHeader>
       </Card>
 
-      <Tabs defaultValue="mom" className="space-y-4">
+      <Tabs defaultValue="monthly" className="space-y-4">
         <TabsList className="w-full justify-start overflow-x-auto sm:w-fit">
           {sliceConfigs.map((slice) => (
             <TabsTrigger key={slice.key} value={slice.key}>
