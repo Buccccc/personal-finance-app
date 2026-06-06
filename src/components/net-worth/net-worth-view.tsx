@@ -155,16 +155,6 @@ export function NetWorthView() {
         </Card>
       )}
 
-      <NetWorthTrendChart
-        rows={historyQuery.data ?? []}
-        isLoading={historyQuery.isLoading}
-      />
-
-      <ItemHistoryChart
-        items={itemsQuery.data ?? []}
-        isLoading={itemsQuery.isLoading}
-      />
-
       <div className="flex items-center justify-between gap-3 rounded-xl border bg-muted/20 px-4 py-3">
         <div>
           <p className="font-medium">Ledger</p>
@@ -207,6 +197,16 @@ export function NetWorthView() {
           isLoading={itemsQuery.isLoading || classesQuery.isLoading}
         />
       </div>
+
+      <NetWorthTrendChart
+        rows={historyQuery.data ?? []}
+        isLoading={historyQuery.isLoading}
+      />
+
+      <ItemHistoryChart
+        items={itemsQuery.data ?? []}
+        isLoading={itemsQuery.isLoading}
+      />
     </div>
   );
 }
