@@ -3,6 +3,8 @@
 import { FormEvent, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
   Line,
   LineChart,
@@ -52,7 +54,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { formatDate, formatMoney, formatRatio } from "@/lib/format";
+import { formatDate, formatMoney, formatMonth, formatRatio } from "@/lib/format";
 import {
   type NetWorthClass,
   type NetWorthItemWithValues,
@@ -67,6 +69,7 @@ import {
   useUpdateNetWorthClass,
   useUpsertValueEntry,
 } from "@/lib/hooks/net-worth";
+import { useMonthlyNetWorth } from "@/lib/hooks/trends";
 
 const headlineCards = [
   { label: "Net Worth", key: "netWorth" },
@@ -109,6 +112,7 @@ export function NetWorthView() {
   const currentQuery = useNetWorthCurrent();
   const classesQuery = useNetWorthClasses();
   const itemsQuery = useNetWorthItems();
+  const historyQuery = useMonthlyNetWorth();
   const [showHidden, setShowHidden] = useState(false);
 
   const itemsByKind = useMemo(() => {
@@ -194,11 +198,90 @@ export function NetWorthView() {
         />
       </div>
 
+      <NetWorthTrendChart
+        rows={historyQuery.data ?? []}
+        isLoading={historyQuery.isLoading}
+      />
+
       <ItemHistoryChart
         items={itemsQuery.data ?? []}
         isLoading={itemsQuery.isLoading}
       />
     </div>
+  );
+}
+
+function NetWorthTrendChart({
+  rows,
+  isLoading,
+}: {
+  rows: { month: string | null; net_worth: number | null }[];
+  isLoading: boolean;
+}) {
+  const data = useMemo(
+    () =>
+      [...rows]
+        .filter((r) => r.month)
+        .sort((a, b) => (a.month ?? "").localeCompare(b.month ?? ""))
+        .map((r) => ({ month: r.month as string, value: Number(r.net_worth ?? 0) })),
+    [rows],
+  );
+
+  if (isLoading) return <Skeleton className="h-72 w-full" />;
+  if (data.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Net worth over time</CardTitle>
+        <CardDescription>Month-end net worth across all entries.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="h-72 w-full min-w-0 overflow-hidden">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart
+              data={data}
+              margin={{ left: 8, right: 16, top: 8, bottom: 4 }}
+            >
+              <defs>
+                <linearGradient id="nwFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis
+                dataKey="month"
+                tickFormatter={(m) => formatMonth(String(m))}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 11 }}
+                minTickGap={28}
+              />
+              <YAxis
+                tickFormatter={(v) => formatMoney(Number(v))}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 11 }}
+                width={84}
+              />
+              <Tooltip
+                cursor={false}
+                formatter={(v) => formatMoney(Number(v))}
+                labelFormatter={(m) => formatMonth(String(m))}
+              />
+              <Area
+                type="monotone"
+                dataKey="value"
+                stroke="var(--chart-1)"
+                strokeWidth={2}
+                fill="url(#nwFill)"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

@@ -1,0 +1,3 @@
+-- Liquidity ratio = liquid assets / CURRENT liabilities (is_current).
+-- HECS (is_current=false) excluded; credit cards included. Net worth uses all
+-- liabilities. (Full view bodies applied via MCP migration 0020.)
