@@ -65,6 +65,15 @@ function toIso(ddmmyyyy: string): string | null {
   return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
 }
 
+// CommBank embeds the value date (when the card was tapped / payment made) in
+// the description, e.g. "...Card xx0079 Value Date: 02/06/2026". That reflects
+// true spending date better than the transaction date (when funds settle), so
+// prefer it when present.
+function extractValueDate(description: string): string | null {
+  const m = description.match(/Value Date:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i);
+  return m ? toIso(m[1]) : null;
+}
+
 function parseMoney(s: string): number | null {
   const t = s.replace(/[^0-9.\-]/g, "");
   if (t === "" || t === "-" || t === "+") return null;
@@ -89,12 +98,15 @@ async function parseCommbankCsv(
   for (const line of lines) {
     const cells = splitCsvLine(line);
     if (cells.length < 3) continue;
-    const date = toIso(cells[0]);
-    if (!date) continue; // skips any header row (first cell not a date)
+    const transactionDate = toIso(cells[0]);
+    if (!transactionDate) continue; // skips any header row (first cell not a date)
     const amount = parseMoney(cells[1]);
     if (amount === null) continue;
     const description = (cells[2] ?? "").trim();
     const balance = (cells[3] ?? "").trim();
+    // Use the value date when CommBank provides one; otherwise the transaction
+    // date is the value date.
+    const date = extractValueDate(description) ?? transactionDate;
     const hash = await sha256Hex(
       `${accountId}|${date}|${amount}|${description}|${balance}`,
     );

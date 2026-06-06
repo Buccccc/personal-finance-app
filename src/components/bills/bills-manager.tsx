@@ -1,6 +1,13 @@
 "use client";
 
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import {
   addMonths,
   addWeeks,
@@ -13,6 +20,7 @@ import {
   isSameMonth,
   parseISO,
   startOfMonth,
+  startOfToday,
   startOfWeek,
   format as formatDateKey,
 } from "date-fns";
@@ -173,6 +181,21 @@ function addFrequency(anchor: Date, frequency: RecurringFrequency, count: number
   return addYears(anchor, count);
 }
 
+// The next due date on or after today: rolls the stored anchor forward by its
+// frequency until it is no longer in the past.
+function effectiveNextDue(item: RecurringItem): string {
+  const anchor = parseLocalDate(item.next_due_date);
+  if (!anchor) return item.next_due_date;
+  const today = startOfToday();
+  let step = 0;
+  let date = anchor;
+  while (isBefore(date, today)) {
+    step += 1;
+    date = addFrequency(anchor, item.frequency, step);
+  }
+  return formatDateKey(date, "yyyy-MM-dd");
+}
+
 function projectOccurrences(
   items: RecurringItem[],
   month: Date,
@@ -257,6 +280,21 @@ export function BillsManager() {
   const isLoading =
     recurringItems.isLoading || accounts.isLoading || categories.isLoading;
   const error = recurringItems.error ?? accounts.error ?? categories.error;
+
+  // Keep stored next_due_date current: roll any active item whose due date has
+  // passed forward to its next occurrence. Guarded so each id rolls at most once.
+  const rolledIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const item of recurringItems.data ?? []) {
+      if (!item.active || rolledIds.current.has(item.id)) continue;
+      const next = effectiveNextDue(item);
+      if (next !== item.next_due_date) {
+        rolledIds.current.add(item.id);
+        updateRecurringItem.mutate({ id: item.id, item: { next_due_date: next } });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recurringItems.data]);
 
   const openCreateDialog = () => {
     setEditingItem(null);
@@ -425,7 +463,11 @@ function RecurringItemsList({
         {isLoading ? (
           <RecurringItemsSkeleton />
         ) : items.length > 0 ? (
-          items.map((item, index) => (
+          [...items]
+            .sort((a, b) =>
+              effectiveNextDue(a).localeCompare(effectiveNextDue(b)),
+            )
+            .map((item, index) => (
             <motion.div
               key={item.id}
               initial={{ opacity: 0, y: 6 }}
@@ -436,7 +478,7 @@ function RecurringItemsList({
                 <CardHeader>
                   <CardTitle>{item.name}</CardTitle>
                   <CardDescription>
-                    Due {formatDate(item.next_due_date)} ·{" "}
+                    Next due {formatDate(effectiveNextDue(item))} ·{" "}
                     {formatRecurringFrequency(item.frequency)}
                   </CardDescription>
                   <CardAction className="flex items-center gap-1">
@@ -552,6 +594,7 @@ function BillsCalendar({
       end: endOfWeek(monthEnd, { weekStartsOn: 1 }),
     });
   }, [visibleMonth]);
+  const todayKey = formatDateKey(new Date(), "yyyy-MM-dd");
 
   return (
     <div className="space-y-4">
@@ -608,16 +651,27 @@ function BillsCalendar({
                   const dayOccurrences = occurrencesByDay.get(dateKey) ?? [];
                   const dayTotal = totalForOccurrences(dayOccurrences).net;
                   const isCurrentMonth = isSameMonth(day, visibleMonth);
+                  const isToday = dateKey === todayKey;
 
                   return (
                     <div
                       key={dateKey}
-                      className={`min-h-14 border-r border-b p-1 text-sm last:border-r-0 sm:min-h-28 sm:p-2 ${
-                        isCurrentMonth ? "bg-background" : "bg-muted/20 text-muted-foreground"
+                      className={`relative min-h-14 border-r border-b p-1 text-sm last:border-r-0 sm:min-h-28 sm:p-2 ${
+                        isToday
+                          ? "bg-primary/5 ring-1 ring-inset ring-primary/40"
+                          : isCurrentMonth
+                            ? "bg-background"
+                            : "bg-muted/20 text-muted-foreground"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1 sm:mb-2">
-                        <span className="text-xs font-medium sm:text-sm">
+                        <span
+                          className={
+                            isToday
+                              ? "flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground sm:text-sm"
+                              : "text-xs font-medium sm:text-sm"
+                          }
+                        >
                           {formatDateKey(day, "d")}
                         </span>
                         {dayOccurrences.length > 0 && (
