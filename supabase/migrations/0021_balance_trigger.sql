@@ -1,0 +1,7 @@
+-- accounts.balance maintained from transactions via trigger:
+--  * manual inserts (import_hash IS NULL) add their amount
+--  * imported inserts do NOT (CSV running balance is set authoritatively)
+--  * updates/deletes adjust by delta
+-- One-time aligns credit-card balances to their transaction sum.
+-- sync_account_networth() credit-card owed now derives from balance.
+-- (Full bodies applied via MCP migration 0021.)

@@ -7,7 +7,6 @@ import {
   accountTypes,
   formatAccountType,
   useAccounts,
-  useAccountTxnTotals,
   useCreateAccount,
   useDeleteAccount,
   useUpdateAccount,
@@ -96,7 +95,6 @@ export function AccountsManager() {
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
   const deleteAccount = useDeleteAccount();
-  const txnTotals = useAccountTxnTotals();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [deletingAccount, setDeletingAccount] = useState<Account | null>(null);
@@ -185,7 +183,7 @@ export function AccountsManager() {
                 {account.type === "credit_card" ? (
                   (() => {
                     const limit = account.credit_limit ?? 0;
-                    const owed = -(txnTotals.data?.get(account.id) ?? 0);
+                    const owed = -(account.balance ?? 0);
                     const available = limit - owed;
                     return (
                       <div className="space-y-1">
@@ -408,7 +406,7 @@ function AccountFormDialog({
             />
           </div>
 
-          {form.type === "credit_card" ? (
+          {form.type === "credit_card" && (
             <div className="space-y-2">
               <Label htmlFor="account-limit">Credit limit</Label>
               <Input
@@ -424,31 +422,32 @@ function AccountFormDialog({
                 }
                 placeholder="2500"
               />
-              <p className="text-xs text-muted-foreground">
-                Available credit = limit − amount owed (from card transactions).
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="account-balance">Current balance</Label>
-              <Input
-                id="account-balance"
-                type="number"
-                step="0.01"
-                value={form.balance}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    balance: event.target.value,
-                  }))
-                }
-                placeholder="0.00"
-              />
-              <p className="text-xs text-muted-foreground">
-                Updated automatically from the latest CSV import; edit to correct.
-              </p>
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="account-balance">
+              {form.type === "credit_card" ? "Current balance (negative if owing)" : "Current balance"}
+            </Label>
+            <Input
+              id="account-balance"
+              type="number"
+              step="0.01"
+              value={form.balance}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  balance: event.target.value,
+                }))
+              }
+              placeholder="0.00"
+            />
+            <p className="text-xs text-muted-foreground">
+              {form.type === "credit_card"
+                ? "Adjusts automatically with each transaction (owed = −balance). Edit to correct."
+                : "Adjusts automatically with each transaction and CSV import. Edit to correct."}
+            </p>
+          </div>
 
           <DialogFooter>
             <Button

@@ -226,21 +226,19 @@ export function CsvImporter() {
         imported += batch.length;
       }
 
-      // Update the account balance from the most recent row's running balance
-      // (CommBank exports include it). Skip credit cards (owed is derived from
-      // transactions). Then re-sync net worth from balances.
-      const account = accountOptions.find((a) => a.id === accountId);
-      if (account && account.type !== "credit_card") {
-        const latest = [...parsed].sort((a, b) =>
-          b.date.localeCompare(a.date),
-        )[0];
-        const latestBalance = latest ? parseMoney(latest.balance) : null;
-        if (latestBalance !== null) {
-          await supabase
-            .from("accounts")
-            .update({ balance: latestBalance })
-            .eq("id", accountId);
-        }
+      // Set the account balance authoritatively from the most recent row's
+      // running balance (CommBank exports include it, for cards too — negative
+      // when owing). Imported rows don't increment via the DB trigger, so this
+      // is the source of truth. Then re-sync net worth from balances.
+      const latest = [...parsed].sort((a, b) =>
+        b.date.localeCompare(a.date),
+      )[0];
+      const latestBalance = latest ? parseMoney(latest.balance) : null;
+      if (latestBalance !== null) {
+        await supabase
+          .from("accounts")
+          .update({ balance: latestBalance })
+          .eq("id", accountId);
       }
       await supabase.rpc("sync_account_networth");
 
