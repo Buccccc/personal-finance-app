@@ -7,6 +7,7 @@ import {
   accountTypes,
   formatAccountType,
   useAccounts,
+  useAccountTxnTotals,
   useCreateAccount,
   useDeleteAccount,
   useUpdateAccount,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/hooks/accounts";
 import { AccountBadge } from "@/components/account-badge";
 import { bankBrand } from "@/lib/bank-brand";
+import { formatMoney } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,6 +51,8 @@ type AccountFormState = {
   type: AccountType;
   institution: string;
   currency: string;
+  balance: string;
+  creditLimit: string;
 };
 
 const emptyAccountForm: AccountFormState = {
@@ -56,6 +60,8 @@ const emptyAccountForm: AccountFormState = {
   type: "everyday",
   institution: "",
   currency: "AUD",
+  balance: "",
+  creditLimit: "",
 };
 
 function accountToForm(account: Account): AccountFormState {
@@ -66,15 +72,22 @@ function accountToForm(account: Account): AccountFormState {
       : "everyday",
     institution: account.institution ?? "",
     currency: account.currency || "AUD",
+    balance: String(account.balance ?? 0),
+    creditLimit: account.credit_limit === null ? "" : String(account.credit_limit),
   };
 }
 
 function normaliseAccountForm(form: AccountFormState) {
+  const balance = Number(form.balance);
+  const creditLimit = form.creditLimit.trim() ? Number(form.creditLimit) : null;
   return {
     name: form.name.trim(),
     type: form.type,
     institution: form.institution.trim() || null,
     currency: form.currency.trim().toUpperCase() || "AUD",
+    balance: Number.isFinite(balance) ? balance : 0,
+    credit_limit:
+      creditLimit !== null && Number.isFinite(creditLimit) ? creditLimit : null,
   };
 }
 
@@ -83,6 +96,7 @@ export function AccountsManager() {
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
   const deleteAccount = useDeleteAccount();
+  const txnTotals = useAccountTxnTotals();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [deletingAccount, setDeletingAccount] = useState<Account | null>(null);
@@ -167,7 +181,42 @@ export function AccountsManager() {
                   </Button>
                 </CardAction>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
+                {account.type === "credit_card" ? (
+                  (() => {
+                    const limit = account.credit_limit ?? 0;
+                    const owed = -(txnTotals.data?.get(account.id) ?? 0);
+                    const available = limit - owed;
+                    return (
+                      <div className="space-y-1">
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-xs text-muted-foreground">
+                            Available
+                          </span>
+                          <span className="tabular text-lg font-semibold">
+                            {formatMoney(available)}
+                          </span>
+                        </div>
+                        <div className="flex items-baseline justify-between text-xs text-muted-foreground">
+                          <span>Owed {formatMoney(owed)}</span>
+                          <span>
+                            Limit{" "}
+                            {account.credit_limit === null
+                              ? "—"
+                              : formatMoney(limit)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-muted-foreground">Balance</span>
+                    <span className="tabular text-lg font-semibold">
+                      {formatMoney(account.balance)}
+                    </span>
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">{formatAccountType(account.type)}</Badge>
                   <Badge variant="outline">{account.currency}</Badge>
@@ -358,6 +407,48 @@ function AccountFormDialog({
               placeholder="Bank name, card provider, or leave blank"
             />
           </div>
+
+          {form.type === "credit_card" ? (
+            <div className="space-y-2">
+              <Label htmlFor="account-limit">Credit limit</Label>
+              <Input
+                id="account-limit"
+                type="number"
+                step="0.01"
+                value={form.creditLimit}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    creditLimit: event.target.value,
+                  }))
+                }
+                placeholder="2500"
+              />
+              <p className="text-xs text-muted-foreground">
+                Available credit = limit − amount owed (from card transactions).
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="account-balance">Current balance</Label>
+              <Input
+                id="account-balance"
+                type="number"
+                step="0.01"
+                value={form.balance}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    balance: event.target.value,
+                  }))
+                }
+                placeholder="0.00"
+              />
+              <p className="text-xs text-muted-foreground">
+                Updated automatically from the latest CSV import; edit to correct.
+              </p>
+            </div>
+          )}
 
           <DialogFooter>
             <Button

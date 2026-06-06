@@ -20,10 +20,45 @@ export type AccountInsert = Omit<
 >;
 export type AccountUpdate = Pick<
   TablesUpdate<"accounts">,
-  "name" | "type" | "institution" | "currency"
+  "name" | "type" | "institution" | "currency" | "balance" | "credit_limit"
 >;
 
 export const accountsQueryKey = ["accounts"] as const;
+export const accountTxnTotalsQueryKey = ["account-txn-totals"] as const;
+
+/** Recompute today's E-Cash / Savings / credit-card-debt net worth from balances. */
+export async function syncAccountNetworth() {
+  const supabase = createClient();
+  const { error } = await supabase.rpc("sync_account_networth");
+  if (error) throw new Error(error.message);
+}
+
+/** Net transaction total per account id (credit-card owed = -total). */
+export function useAccountTxnTotals() {
+  return useQuery({
+    queryKey: accountTxnTotalsQueryKey,
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("account_txn_totals_view")
+        .select("account_id, txn_total");
+      if (error) throw new Error(error.message);
+      const map = new Map<string, number>();
+      for (const row of data ?? []) {
+        if (row.account_id) map.set(row.account_id, Number(row.txn_total ?? 0));
+      }
+      return map;
+    },
+  });
+}
+
+export function useSyncAccountNetworth() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: syncAccountNetworth,
+    onSuccess: () => queryClient.invalidateQueries(),
+  });
+}
 
 export function formatAccountType(type: string) {
   return type
@@ -63,8 +98,9 @@ export function useCreateAccount() {
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: accountsQueryKey });
+    onSuccess: async () => {
+      await syncAccountNetworth().catch(() => {});
+      queryClient.invalidateQueries();
     },
   });
 }
@@ -91,8 +127,9 @@ export function useUpdateAccount() {
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: accountsQueryKey });
+    onSuccess: async () => {
+      await syncAccountNetworth().catch(() => {});
+      queryClient.invalidateQueries();
     },
   });
 }
@@ -107,8 +144,9 @@ export function useDeleteAccount() {
 
       if (error) throw new Error(error.message);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: accountsQueryKey });
+    onSuccess: async () => {
+      await syncAccountNetworth().catch(() => {});
+      queryClient.invalidateQueries();
     },
   });
 }

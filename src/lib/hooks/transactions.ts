@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { categoriesQueryKey } from "@/lib/hooks/categories";
+import { syncAccountNetworth } from "@/lib/hooks/accounts";
 import type { Tables, TablesInsert, TablesUpdate } from "@/lib/supabase/types";
 
 export type Transaction = Tables<"transactions">;
@@ -187,8 +188,9 @@ export function useCreateTransaction() {
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: transactionsQueryKey });
+    onSuccess: async () => {
+      await syncAccountNetworth().catch(() => {});
+      queryClient.invalidateQueries();
     },
   });
 }
@@ -215,8 +217,9 @@ export function useUpdateTransaction() {
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: transactionsQueryKey });
+    onSuccess: async () => {
+      await syncAccountNetworth().catch(() => {});
+      queryClient.invalidateQueries();
     },
   });
 }
@@ -265,8 +268,9 @@ export function useDeleteTransaction() {
 
       if (error) throw new Error(error.message);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: transactionsQueryKey });
+    onSuccess: async () => {
+      await syncAccountNetworth().catch(() => {});
+      queryClient.invalidateQueries();
     },
   });
 }

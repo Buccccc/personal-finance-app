@@ -16,8 +16,10 @@ export type Database = {
     Tables: {
       accounts: {
         Row: {
+          balance: number
           basiq_account_id: string | null
           created_at: string
+          credit_limit: number | null
           currency: string
           id: string
           institution: string | null
@@ -27,8 +29,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          balance?: number
           basiq_account_id?: string | null
           created_at?: string
+          credit_limit?: number | null
           currency?: string
           id?: string
           institution?: string | null
@@ -38,8 +42,10 @@ export type Database = {
           user_id?: string
         }
         Update: {
+          balance?: number
           basiq_account_id?: string | null
           created_at?: string
+          credit_limit?: number | null
           currency?: string
           id?: string
           institution?: string | null
@@ -674,6 +680,14 @@ export type Database = {
       }
     }
     Views: {
+      account_txn_totals_view: {
+        Row: {
+          account_id: string | null
+          txn_total: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
       monthly_category_breakdown_view: {
         Row: {
           category_id: string | null
@@ -732,7 +746,10 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      sync_account_networth: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
