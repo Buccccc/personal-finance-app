@@ -79,7 +79,7 @@ const headlineCards = [
   { label: "Net Worth", key: "netWorth" },
   { label: "Total Assets", key: "assets" },
   { label: "Total Liabilities", key: "liabilities" },
-  { label: "Liquid Worth", key: "liquidAssets" },
+  { label: "Net Liquid", key: "netLiquid" },
 ] as const;
 
 const netWorthKindItems: Record<NetWorthKind, string> = {
@@ -298,6 +298,7 @@ function HeadlineCards({
     liabilities: number | null;
     liquid_assets: number | null;
     liquidity_ratio: number | null;
+    net_liquid: number | null;
     net_worth: number | null;
   } | null;
   isLoading: boolean;
@@ -306,6 +307,7 @@ function HeadlineCards({
     netWorth: formatMoney(current?.net_worth ?? 0),
     assets: formatMoney(current?.assets ?? 0),
     liquidAssets: formatMoney(current?.liquid_assets ?? 0),
+    netLiquid: formatMoney(current?.net_liquid ?? 0),
     liabilities: formatMoney(Math.abs(current?.liabilities ?? 0)),
     liquidityRatio: current ? formatRatio(current.liquidity_ratio) : "—",
   };
@@ -330,7 +332,16 @@ function HeadlineCards({
                   values[card.key]
                 )}
               </CardTitle>
-              {card.key === "liquidAssets" && (
+              {card.key === "assets" && (
+                <p className="tabular text-xs text-muted-foreground">
+                  {isLoading ? (
+                    <Skeleton className="h-4 w-24" />
+                  ) : (
+                    `Total liquid assets ${values.liquidAssets}`
+                  )}
+                </p>
+              )}
+              {card.key === "netLiquid" && (
                 <p className="tabular text-xs text-muted-foreground">
                   {isLoading ? (
                     <Skeleton className="h-4 w-24" />

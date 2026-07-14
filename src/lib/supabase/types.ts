@@ -727,6 +727,7 @@ export type Database = {
           liabilities: number | null
           liquid_assets: number | null
           liquidity_ratio: number | null
+          net_liquid: number | null
           net_worth: number | null
           user_id: string | null
         }
@@ -739,6 +740,7 @@ export type Database = {
           liquid_assets: number | null
           liquidity_ratio: number | null
           month: string | null
+          net_liquid: number | null
           net_worth: number | null
           user_id: string | null
         }

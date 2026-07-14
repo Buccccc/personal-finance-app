@@ -344,15 +344,15 @@ function KpiGrid({
         : netWorthMissingDescription,
     },
     {
-      title: isCurrent ? "Current liquid worth" : "Liquid worth (month-end)",
-      value: hasMoneyValue(selectedNetWorth?.liquid_assets)
-        ? formatMoney(selectedNetWorth.liquid_assets)
+      title: isCurrent ? "Current net liquid" : "Net liquid (month-end)",
+      value: hasMoneyValue(selectedNetWorth?.net_liquid)
+        ? formatMoney(selectedNetWorth.net_liquid)
         : "—",
       description:
         selectedNetWorth?.liquidity_ratio != null
           ? `Liquidity ${formatRatio(selectedNetWorth.liquidity_ratio)}`
           : hasSelectedNetWorth
-            ? "Cash + liquid assets"
+            ? "Liquid assets minus current liabilities"
             : netWorthMissingDescription,
     },
   ];
