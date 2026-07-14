@@ -23,6 +23,8 @@ import {
   useSkipTransaction,
   type ReviewTransaction,
 } from "@/lib/hooks/review";
+import Link from "next/link";
+import { useUnlinkedSplitBillCount } from "@/lib/hooks/transactions";
 import { formatDate, formatMoney } from "@/lib/format";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -103,6 +105,7 @@ export function ReviewMode() {
   const reviewQueue = useReviewQueue();
   const accounts = useAccounts();
   const categories = useCategories();
+  const unlinkedSplitBills = useUnlinkedSplitBillCount();
   const categoriseTransaction = useCategoriseTransaction();
   const skipTransaction = useSkipTransaction();
   const setTaxDeductible = useSetTaxDeductible();
@@ -272,6 +275,25 @@ export function ReviewMode() {
           {isLoading ? "Loading queue..." : `${remainingCount} of ${totalCount} left`}
         </div>
       </PageHeader>
+
+      {(unlinkedSplitBills.data ?? 0) > 0 ? (
+        <Card className="mx-auto w-full max-w-xl border-dashed">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 text-sm">
+            <span className="text-muted-foreground">
+              {unlinkedSplitBills.data} reimbursement
+              {unlinkedSplitBills.data === 1 ? "" : "s"} not linked to their
+              expense yet.
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              render={<Link href="/transactions" />}
+            >
+              Link now
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {loadError ? (
         <Card className="mx-auto w-full max-w-xl">

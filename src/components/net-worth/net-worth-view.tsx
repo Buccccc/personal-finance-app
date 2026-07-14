@@ -71,6 +71,10 @@ import {
 } from "@/lib/hooks/net-worth";
 import { useMonthlyNetWorth } from "@/lib/hooks/trends";
 
+// Items in these classes are derived from account balances by a DB trigger
+// (migration 0022) — manual value updates would just be overwritten.
+const AUTO_SYNCED_CLASS_NAMES = new Set(["ecash", "savings", "credit_card"]);
+
 const headlineCards = [
   { label: "Net Worth", key: "netWorth" },
   { label: "Total Assets", key: "assets" },
@@ -754,6 +758,7 @@ function NetWorthItemRow({
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const latestEntry = item.latestEntry;
   const setItemActive = useSetItemActive();
+  const isAutoSynced = AUTO_SYNCED_CLASS_NAMES.has(item.networthClass.name);
 
   async function handleActiveChange() {
     try {
@@ -790,6 +795,14 @@ function NetWorthItemRow({
               !item.networthClass.is_current && (
                 <Badge variant="secondary">Long-term</Badge>
               )}
+            {isAutoSynced && (
+              <Badge
+                variant="secondary"
+                title="Synced automatically from account balances"
+              >
+                Auto
+              </Badge>
+            )}
             {!item.active && <Badge variant="secondary">Hidden</Badge>}
           </div>
           <div className="text-sm text-muted-foreground">
@@ -816,7 +829,7 @@ function NetWorthItemRow({
           >
             {item.active ? "Hide" : "Show"}
           </Button>
-          <UpdateValueDialog item={item} />
+          {!isAutoSynced && <UpdateValueDialog item={item} />}
           <Button
             type="button"
             variant="outline"

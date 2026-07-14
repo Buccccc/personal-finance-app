@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -27,6 +28,8 @@ import {
   ArrowUpDownIcon,
   CheckIcon,
   Edit2Icon,
+  Link2Icon,
+  Link2OffIcon,
   MoreHorizontalIcon,
   PlusIcon,
   Trash2Icon,
@@ -43,7 +46,9 @@ import {
   useCreateTransaction,
   useDeleteTransaction,
   useInfiniteTransactions,
+  useLinkSplitBill,
   useMerchants,
+  useUnlinkSplitBill,
   useUpdateTransaction,
   useUpdateTransactionCategory,
   type Merchant,
@@ -56,6 +61,7 @@ import { AccountBadge } from "@/components/account-badge";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -238,6 +244,11 @@ export function TransactionsFeed() {
   const updateTransaction = useUpdateTransaction();
   const deleteTransaction = useDeleteTransaction();
   const updateTransactionCategory = useUpdateTransactionCategory();
+  const linkSplitBill = useLinkSplitBill();
+  const unlinkSplitBill = useUnlinkSplitBill();
+  const [selectedIds, setSelectedIds] = useState<Set<Transaction["id"]>>(
+    () => new Set(),
+  );
   const [sorting, setSorting] = useState<SortingState>([
     { id: "date", desc: true },
   ]);
@@ -312,8 +323,102 @@ export function TransactionsFeed() {
   }, [accountMap, categoryMap, loadedTransactions, merchantMap]);
   const mobileGroups = useMemo(() => groupTransactionsByDate(rows), [rows]);
 
+  // Split-bill helpers: per-group reimbursement totals from the rows that
+  // happen to be loaded (no extra fetches — tooltips degrade gracefully).
+  const splitGroupIncomeTotals = useMemo(() => {
+    const totals = new Map<string, number>();
+
+    for (const row of rows) {
+      if (row.transfer_group_id && row.type === "income" && row.amount > 0) {
+        totals.set(
+          row.transfer_group_id,
+          (totals.get(row.transfer_group_id) ?? 0) + row.amount,
+        );
+      }
+    }
+
+    return totals;
+  }, [rows]);
+
+  const selectedRows = useMemo(
+    () => rows.filter((row) => selectedIds.has(row.id)),
+    [rows, selectedIds],
+  );
+  const selectedExpenses = selectedRows.filter(
+    (row) => row.type === "expense" && row.amount < 0,
+  );
+  const selectedIncomes = selectedRows.filter(
+    (row) => row.type === "income" && row.amount > 0,
+  );
+  const canLinkSplitBill =
+    selectedExpenses.length === 1 &&
+    selectedIncomes.length >= 1 &&
+    selectedExpenses.length + selectedIncomes.length === selectedRows.length;
+
+  function toggleSelected(id: Transaction["id"]) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  async function handleLinkSplitBill() {
+    if (!canLinkSplitBill) return;
+
+    const expense = selectedExpenses[0];
+    const incomeTotal = selectedIncomes.reduce((total, row) => total + row.amount, 0);
+    const net = expense.amount + incomeTotal;
+
+    try {
+      await linkSplitBill.mutateAsync({
+        expenseId: expense.id,
+        incomeIds: selectedIncomes.map((row) => row.id),
+      });
+      toast.success(
+        `Linked ${selectedIncomes.length} reimbursement${
+          selectedIncomes.length === 1 ? "" : "s"
+        } — net ${formatMoney(net)}`,
+      );
+      setSelectedIds(new Set());
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not link reimbursements",
+      );
+    }
+  }
+
+  const handleUnlinkSplitBill = useCallback(
+    async (transaction: Transaction) => {
+      try {
+        await unlinkSplitBill.mutateAsync([transaction.id]);
+        toast.success("Split bill unlinked");
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Could not unlink split bill",
+        );
+      }
+    },
+    [unlinkSplitBill],
+  );
+
   const columns = useMemo<ColumnDef<TransactionFeedRow>[]>(
     () => [
+      {
+        id: "select",
+        header: "",
+        cell: ({ row }) => (
+          <Checkbox
+            checked={selectedIds.has(row.original.id)}
+            onCheckedChange={() => toggleSelected(row.original.id)}
+            aria-label="Select transaction"
+          />
+        ),
+      },
       {
         accessorKey: "date",
         header: ({ column }) => (
@@ -345,20 +450,39 @@ export function TransactionsFeed() {
       {
         id: "merchant",
         header: "Merchant / description",
-        cell: ({ row }) => (
-          <div className="max-w-[280px]">
-            <div className="truncate font-medium">
-              {row.original.merchantName ||
-                row.original.description ||
-                "No description"}
-            </div>
-            {row.original.merchantName && row.original.description ? (
-              <div className="truncate text-xs text-muted-foreground">
-                {row.original.description}
+        cell: ({ row }) => {
+          const groupId = row.original.transfer_group_id;
+          const loadedIncomeTotal = groupId
+            ? splitGroupIncomeTotals.get(groupId)
+            : undefined;
+          const splitTitle =
+            row.original.type === "expense" && loadedIncomeTotal !== undefined
+              ? `Net ${formatMoney(row.original.amount + loadedIncomeTotal)} after reimbursement`
+              : "Split bill — reimbursed";
+
+          return (
+            <div className="max-w-[280px]">
+              <div className="flex items-center gap-1.5">
+                <span className="truncate font-medium">
+                  {row.original.merchantName ||
+                    row.original.description ||
+                    "No description"}
+                </span>
+                {groupId ? (
+                  <Badge variant="outline" title={splitTitle}>
+                    <Link2Icon />
+                    Split
+                  </Badge>
+                ) : null}
               </div>
-            ) : null}
-          </div>
-        ),
+              {row.original.merchantName && row.original.description ? (
+                <div className="truncate text-xs text-muted-foreground">
+                  {row.original.description}
+                </div>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         accessorKey: "amount",
@@ -464,6 +588,14 @@ export function TransactionsFeed() {
                 <Edit2Icon />
                 Edit
               </DropdownMenuItem>
+              {row.original.transfer_group_id ? (
+                <DropdownMenuItem
+                  onClick={() => handleUnlinkSplitBill(row.original)}
+                >
+                  <Link2OffIcon />
+                  Unlink split
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem
                 variant="destructive"
                 onClick={() => setDeletingTransaction(row.original)}
@@ -476,7 +608,13 @@ export function TransactionsFeed() {
         ),
       },
     ],
-    [categories.data, updateTransactionCategory],
+    [
+      categories.data,
+      handleUnlinkSplitBill,
+      selectedIds,
+      splitGroupIncomeTotals,
+      updateTransactionCategory,
+    ],
   );
 
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -619,6 +757,39 @@ export function TransactionsFeed() {
                   onPageSizeChange={setPageSize}
                 />
               </div>
+
+              {selectedRows.length > 0 ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                  <span className="text-muted-foreground">
+                    {selectedRows.length} selected
+                    {canLinkSplitBill
+                      ? " — 1 expense + " +
+                        `${selectedIncomes.length} reimbursement${
+                          selectedIncomes.length === 1 ? "" : "s"
+                        }`
+                      : " — select one expense and its reimbursement(s) to link"}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedIds(new Set())}
+                    >
+                      Clear
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={!canLinkSplitBill || linkSplitBill.isPending}
+                      onClick={handleLinkSplitBill}
+                    >
+                      <Link2Icon />
+                      {linkSplitBill.isPending
+                        ? "Linking..."
+                        : "Link reimbursement"}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
 
               {isLoading ? (
                 <>
@@ -1393,6 +1564,14 @@ function MobileTransactionRow({
           <span className="truncate">
             {transaction.categoryName ?? "Uncategorised"}
           </span>
+          {transaction.transfer_group_id ? (
+            <Badge
+              variant="outline"
+              className="h-4 px-1.5 text-[10px] text-muted-foreground"
+            >
+              Split
+            </Badge>
+          ) : null}
           {transaction.tax_deductible ? (
             <Badge
               variant="outline"

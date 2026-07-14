@@ -255,6 +255,86 @@ export function useUpdateTransactionCategory() {
   });
 }
 
+export function useLinkSplitBill() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      expenseId,
+      incomeIds,
+    }: {
+      expenseId: Transaction["id"];
+      incomeIds: Transaction["id"][];
+    }) => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("link_split_bill", {
+        p_expense_id: expenseId,
+        p_income_ids: incomeIds,
+      });
+
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+    },
+  });
+}
+
+export function useUnlinkSplitBill() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (txnIds: Transaction["id"][]) => {
+      const supabase = createClient();
+      const { error } = await supabase.rpc("unlink_split_bill", {
+        p_txn_ids: txnIds,
+      });
+
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+    },
+  });
+}
+
+// Reimbursement income that is tagged "Split Bill" but not yet linked to its
+// expense — surfaced in Review as a gentle nudge. Scoped to the last 60 days:
+// there is a deep backlog of historical Split Bill income that predates
+// linking, and a permanently large count would just train banner blindness.
+export function useUnlinkedSplitBillCount() {
+  return useQuery({
+    queryKey: [...transactionsQueryKey, "unlinked-split-bills"] as const,
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data: splitCategories, error: categoriesError } = await supabase
+        .from("categories")
+        .select("id")
+        .eq("name", "Split Bill");
+
+      if (categoriesError) throw new Error(categoriesError.message);
+
+      const categoryIds = (splitCategories ?? []).map((category) => category.id);
+      if (categoryIds.length === 0) return 0;
+
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 60);
+
+      const { count, error } = await supabase
+        .from("transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("type", "income")
+        .is("transfer_group_id", null)
+        .in("category_id", categoryIds)
+        .gte("date", cutoff.toISOString().slice(0, 10));
+
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    },
+  });
+}
+
 export function useDeleteTransaction() {
   const queryClient = useQueryClient();
 

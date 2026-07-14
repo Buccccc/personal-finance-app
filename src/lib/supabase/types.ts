@@ -746,8 +746,16 @@ export type Database = {
       }
     }
     Functions: {
+      link_split_bill: {
+        Args: { p_expense_id: string; p_income_ids: string[] }
+        Returns: string
+      }
       sync_account_networth: {
         Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      unlink_split_bill: {
+        Args: { p_txn_ids: string[] }
         Returns: undefined
       }
     }
