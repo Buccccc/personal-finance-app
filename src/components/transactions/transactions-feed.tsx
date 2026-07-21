@@ -32,6 +32,7 @@ import {
   Link2OffIcon,
   MoreHorizontalIcon,
   PlusIcon,
+  RotateCcwIcon,
   Trash2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -256,6 +257,9 @@ export function TransactionsFeed() {
   const [accountFilter, setAccountFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [taxFilter, setTaxFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [pageSize, setPageSize] = useState(50);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] =
@@ -273,7 +277,15 @@ export function TransactionsFeed() {
     search: debouncedSearch,
     accountId: accountFilter === "all" ? null : accountFilter,
     type: typeFilter === "all" ? null : typeFilter,
-    categoryId: categoryFilter === "all" ? null : categoryFilter,
+    categoryId:
+      categoryFilter === "all" || categoryFilter === "uncategorised"
+        ? null
+        : categoryFilter,
+    uncategorised: categoryFilter === "uncategorised",
+    taxDeductible:
+      taxFilter === "all" ? null : taxFilter === "deductible",
+    dateFrom: dateFrom || null,
+    dateTo: dateTo || null,
     sortBy,
     sortDirection,
     pageSize,
@@ -640,7 +652,10 @@ export function TransactionsFeed() {
     debouncedSearch.trim().length > 0 ||
     accountFilter !== "all" ||
     typeFilter !== "all" ||
-    categoryFilter !== "all";
+    categoryFilter !== "all" ||
+    taxFilter !== "all" ||
+    dateFrom !== "" ||
+    dateTo !== "";
   const shouldShowEmptyState =
     !hasActiveFilters && !transactions.isLoading && totalTransactions === 0;
   const mobileLoadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -697,7 +712,7 @@ export function TransactionsFeed() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${selectedRows.length > 0 ? "pb-24" : ""}`}>
       <PageHeader
         title="Transactions"
         description="Review, filter, and categorise your transaction feed."
@@ -744,6 +759,22 @@ export function TransactionsFeed() {
                 onTypeFilterChange={setTypeFilter}
                 categoryFilter={categoryFilter}
                 onCategoryFilterChange={setCategoryFilter}
+                taxFilter={taxFilter}
+                onTaxFilterChange={setTaxFilter}
+                dateFrom={dateFrom}
+                onDateFromChange={setDateFrom}
+                dateTo={dateTo}
+                onDateToChange={setDateTo}
+                hasActiveFilters={hasActiveFilters}
+                onClearFilters={() => {
+                  setSearch("");
+                  setAccountFilter("all");
+                  setTypeFilter("all");
+                  setCategoryFilter("all");
+                  setTaxFilter("all");
+                  setDateFrom("");
+                  setDateTo("");
+                }}
                 accounts={accounts.data ?? []}
                 categories={categories.data ?? []}
               />
@@ -757,39 +788,6 @@ export function TransactionsFeed() {
                   onPageSizeChange={setPageSize}
                 />
               </div>
-
-              {selectedRows.length > 0 ? (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
-                  <span className="text-muted-foreground">
-                    {selectedRows.length} selected
-                    {canLinkSplitBill
-                      ? " — 1 expense + " +
-                        `${selectedIncomes.length} reimbursement${
-                          selectedIncomes.length === 1 ? "" : "s"
-                        }`
-                      : " — select one expense and its reimbursement(s) to link"}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedIds(new Set())}
-                    >
-                      Clear
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={!canLinkSplitBill || linkSplitBill.isPending}
-                      onClick={handleLinkSplitBill}
-                    >
-                      <Link2Icon />
-                      {linkSplitBill.isPending
-                        ? "Linking..."
-                        : "Link reimbursement"}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
 
               {isLoading ? (
                 <>
@@ -881,6 +879,48 @@ export function TransactionsFeed() {
         </motion.div>
       )}
 
+      {selectedRows.length > 0 ? (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.16 }}
+          className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 md:left-[calc(16rem+1.5rem)] md:right-6"
+          role="region"
+          aria-label="Selected transaction actions"
+        >
+          <div className="mx-auto flex max-w-3xl flex-col gap-3 rounded-xl bg-card/95 p-3 text-sm shadow-xl ring-1 ring-foreground/15 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-muted-foreground" aria-live="polite">
+              {selectedRows.length} selected
+              {canLinkSplitBill
+                ? " — 1 expense + " +
+                  `${selectedIncomes.length} reimbursement${
+                    selectedIncomes.length === 1 ? "" : "s"
+                  }`
+                : " — select one expense and its reimbursement(s) to link"}
+            </span>
+            <div className="flex shrink-0 items-center justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                Clear
+              </Button>
+              <Button
+                size="sm"
+                disabled={!canLinkSplitBill || linkSplitBill.isPending}
+                onClick={handleLinkSplitBill}
+              >
+                <Link2Icon />
+                {linkSplitBill.isPending
+                  ? "Linking..."
+                  : "Link reimbursement"}
+              </Button>
+            </div>
+          </div>
+        </motion.div>
+      ) : null}
+
       <TransactionFormDialog
         transaction={editingTransaction}
         open={isFormOpen}
@@ -967,6 +1007,14 @@ function TransactionFilters({
   onTypeFilterChange,
   categoryFilter,
   onCategoryFilterChange,
+  taxFilter,
+  onTaxFilterChange,
+  dateFrom,
+  onDateFromChange,
+  dateTo,
+  onDateToChange,
+  hasActiveFilters,
+  onClearFilters,
   accounts,
   categories,
 }: {
@@ -978,6 +1026,14 @@ function TransactionFilters({
   onTypeFilterChange: (value: string) => void;
   categoryFilter: string;
   onCategoryFilterChange: (value: string) => void;
+  taxFilter: string;
+  onTaxFilterChange: (value: string) => void;
+  dateFrom: string;
+  onDateFromChange: (value: string) => void;
+  dateTo: string;
+  onDateToChange: (value: string) => void;
+  hasActiveFilters: boolean;
+  onClearFilters: () => void;
   accounts: { id: string; name: string }[];
   categories: Category[];
 }) {
@@ -996,70 +1052,135 @@ function TransactionFilters({
   };
   const categoryFilterItems = {
     all: "All categories",
+    uncategorised: "Uncategorised",
     ...Object.fromEntries(categoryOptions.map((c) => [c.id, c.name])),
+  };
+  const taxFilterItems = {
+    all: "All tax statuses",
+    deductible: "Tax deductible",
+    not_deductible: "Not tax deductible",
   };
 
   return (
-    <div className="grid gap-3 lg:grid-cols-[minmax(180px,1fr)_180px_160px_180px]">
-      <Input
-        value={search}
-        onChange={(event) => onSearchChange(event.target.value)}
-        placeholder="Search description or merchant..."
-      />
+    <div className="space-y-3">
+      <div className="grid gap-3 lg:grid-cols-[minmax(180px,1fr)_180px_160px_180px]">
+        <Input
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+          placeholder="Search description or merchant..."
+        />
 
-      <Select
-        items={accountFilterItems}
-        value={accountFilter}
-        onValueChange={(value) => onAccountFilterChange(value ?? "all")}
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All accounts</SelectItem>
-          {accounts.map((account) => (
-            <SelectItem key={account.id} value={account.id}>
-              {account.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        <Select
+          items={accountFilterItems}
+          value={accountFilter}
+          onValueChange={(value) => onAccountFilterChange(value ?? "all")}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All accounts</SelectItem>
+            {accounts.map((account) => (
+              <SelectItem key={account.id} value={account.id}>
+                {account.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-      <Select
-        items={typeFilterItems}
-        value={typeFilter}
-        onValueChange={(value) => onTypeFilterChange(value ?? "all")}
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All types</SelectItem>
-          {transactionTypes.map((type) => (
-            <SelectItem key={type} value={type}>
-              {displayTransactionType(type)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        <Select
+          items={typeFilterItems}
+          value={typeFilter}
+          onValueChange={(value) => onTypeFilterChange(value ?? "all")}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All types</SelectItem>
+            {transactionTypes.map((type) => (
+              <SelectItem key={type} value={type}>
+                {displayTransactionType(type)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-      <Select
-        items={categoryFilterItems}
-        value={categoryFilter}
-        onValueChange={(value) => onCategoryFilterChange(value ?? "all")}
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All categories</SelectItem>
-          {categoryOptions.map((category) => (
-            <SelectItem key={category.id} value={category.id}>
-              {category.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        <Select
+          items={categoryFilterItems}
+          value={categoryFilter}
+          onValueChange={(value) => onCategoryFilterChange(value ?? "all")}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            <SelectItem value="uncategorised">Uncategorised</SelectItem>
+            {categoryOptions.map((category) => (
+              <SelectItem key={category.id} value={category.id}>
+                {category.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[180px_180px_200px_auto] lg:items-end">
+        <div className="space-y-1.5">
+          <Label htmlFor="transaction-date-from" className="text-xs text-muted-foreground">
+            From date
+          </Label>
+          <Input
+            id="transaction-date-from"
+            type="date"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onInput={(event) => onDateFromChange(event.currentTarget.value)}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="transaction-date-to" className="text-xs text-muted-foreground">
+            To date
+          </Label>
+          <Input
+            id="transaction-date-to"
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onInput={(event) => onDateToChange(event.currentTarget.value)}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Tax status</Label>
+          <Select
+            items={taxFilterItems}
+            value={taxFilter}
+            onValueChange={(value) => onTaxFilterChange(value ?? "all")}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All tax statuses</SelectItem>
+              <SelectItem value="deductible">Tax deductible</SelectItem>
+              <SelectItem value="not_deductible">Not tax deductible</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Button
+          variant="ghost"
+          onClick={onClearFilters}
+          disabled={!hasActiveFilters}
+          className="justify-self-start"
+        >
+          <RotateCcwIcon />
+          Clear filters
+        </Button>
+      </div>
     </div>
   );
 }

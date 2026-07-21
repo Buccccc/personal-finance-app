@@ -20,6 +20,10 @@ export type InfiniteTransactionsParams = {
   accountId?: Transaction["account_id"] | null;
   type?: Transaction["type"] | null;
   categoryId?: NonNullable<Transaction["category_id"]> | null;
+  uncategorised?: boolean;
+  taxDeductible?: boolean | null;
+  dateFrom?: Transaction["date"] | null;
+  dateTo?: Transaction["date"] | null;
   sortBy?: TransactionSortField;
   sortDirection?: TransactionSortDirection;
   pageSize?: number;
@@ -69,6 +73,10 @@ function normaliseInfiniteTransactionsParams(
     accountId: params.accountId ?? null,
     type: params.type ?? null,
     categoryId: params.categoryId ?? null,
+    uncategorised: params.uncategorised ?? false,
+    taxDeductible: params.taxDeductible ?? null,
+    dateFrom: params.dateFrom ?? null,
+    dateTo: params.dateTo ?? null,
     sortBy: params.sortBy ?? "date",
     sortDirection: params.sortDirection ?? "desc",
     pageSize: params.pageSize ?? defaultTransactionsPageSize,
@@ -122,8 +130,22 @@ export function useInfiniteTransactions(
         query = query.eq("type", queryParams.type);
       }
 
-      if (queryParams.categoryId) {
+      if (queryParams.uncategorised) {
+        query = query.is("category_id", null);
+      } else if (queryParams.categoryId) {
         query = query.eq("category_id", queryParams.categoryId);
+      }
+
+      if (queryParams.taxDeductible !== null) {
+        query = query.eq("tax_deductible", queryParams.taxDeductible);
+      }
+
+      if (queryParams.dateFrom) {
+        query = query.gte("date", queryParams.dateFrom);
+      }
+
+      if (queryParams.dateTo) {
+        query = query.lte("date", queryParams.dateTo);
       }
 
       const { data, error, count } = await query
