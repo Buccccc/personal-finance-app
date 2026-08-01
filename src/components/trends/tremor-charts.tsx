@@ -27,9 +27,13 @@ type ChartProps = {
   categories: string[];
   colors?: string[];
   valueFormatter?: (value: number) => string;
+  /** Tooltip-only formatter. Falls back to valueFormatter (which also drives the axis). */
+  tooltipFormatter?: (value: number) => string;
   className?: string;
-  /** Colour each bar green (>=0) / red (<0) — used for MoM difference charts. */
+  /** Colour each bar by whether the value is good or bad — used for MoM difference charts. */
   colorBySign?: boolean;
+  /** For colorBySign metrics where an increase is bad (expenses, liabilities). */
+  invertSign?: boolean;
 };
 
 const POSITIVE = "#16a34a";
@@ -116,6 +120,7 @@ export function LineChart({
   categories,
   colors,
   valueFormatter,
+  tooltipFormatter,
   className,
 }: ChartProps) {
   return (
@@ -132,7 +137,9 @@ export function LineChart({
           }
         />
         <Tooltip
-          content={<ChartTooltip valueFormatter={valueFormatter} />}
+          content={
+            <ChartTooltip valueFormatter={tooltipFormatter ?? valueFormatter} />
+          }
           cursor={false}
         />
         {categories.map((category, categoryIndex) => (
@@ -158,8 +165,10 @@ export function BarChart({
   categories,
   colors,
   valueFormatter,
+  tooltipFormatter,
   className,
   colorBySign = false,
+  invertSign = false,
 }: ChartProps) {
   return (
     <ChartShell className={className}>
@@ -176,7 +185,9 @@ export function BarChart({
         />
         {colorBySign && <ReferenceLine y={0} stroke="var(--border)" />}
         <Tooltip
-          content={<ChartTooltip valueFormatter={valueFormatter} />}
+          content={
+            <ChartTooltip valueFormatter={tooltipFormatter ?? valueFormatter} />
+          }
           cursor={false}
         />
         {categories.map((category, categoryIndex) => (
@@ -191,11 +202,11 @@ export function BarChart({
               data.map((datum, dataIndex) => {
                 const raw = datum[category];
                 const numeric = typeof raw === "number" ? raw : 0;
+                // For expenses and liabilities a rise is the bad outcome, so
+                // the sign that gets the red bar flips.
+                const isBad = invertSign ? numeric > 0 : numeric < 0;
                 return (
-                  <Cell
-                    key={dataIndex}
-                    fill={numeric >= 0 ? POSITIVE : NEGATIVE}
-                  />
+                  <Cell key={dataIndex} fill={isBad ? NEGATIVE : POSITIVE} />
                 );
               })}
           </Bar>
@@ -211,6 +222,7 @@ export function AreaChart({
   categories,
   colors,
   valueFormatter,
+  tooltipFormatter,
   className,
 }: ChartProps) {
   return (
@@ -227,7 +239,9 @@ export function AreaChart({
           }
         />
         <Tooltip
-          content={<ChartTooltip valueFormatter={valueFormatter} />}
+          content={
+            <ChartTooltip valueFormatter={tooltipFormatter ?? valueFormatter} />
+          }
           cursor={false}
         />
         {categories.map((category, categoryIndex) => {

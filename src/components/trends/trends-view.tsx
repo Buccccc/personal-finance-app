@@ -42,6 +42,15 @@ type SliceKey = "monthly" | "mom" | "ytd" | "yoyMonth" | "yoyYtd";
 type ChartKind = "line" | "bar" | "area";
 type FormatKind = "money" | "percent" | "ratio";
 type AggregateKind = "sum" | "point" | "cashflowSavingsRate";
+/**
+ * Whether a rise in the metric is a good or bad outcome. Expenses and
+ * liabilities go up when things get worse, so their deltas colour the
+ * opposite way to everything else.
+ */
+type Polarity = "up-good" | "up-bad";
+
+/** Prior-year comparison series on the YoY charts — muted so this year reads first. */
+const PRIOR_YEAR_COLOR = "var(--muted-foreground)";
 
 type TrendMonth = {
   month: string;
@@ -57,6 +66,7 @@ type MetricConfig = {
   format: FormatKind;
   chart: ChartKind;
   aggregate: AggregateKind;
+  polarity: Polarity;
   color: string;
 };
 
@@ -98,6 +108,7 @@ const seriesConfigs: SeriesConfig[] = [
         format: "money",
         chart: "bar",
         aggregate: "sum",
+        polarity: "up-good",
         color: "#2563eb",
       },
       {
@@ -107,6 +118,7 @@ const seriesConfigs: SeriesConfig[] = [
         format: "money",
         chart: "bar",
         aggregate: "sum",
+        polarity: "up-bad",
         color: "#dc2626",
       },
       {
@@ -116,6 +128,7 @@ const seriesConfigs: SeriesConfig[] = [
         format: "money",
         chart: "bar",
         aggregate: "sum",
+        polarity: "up-good",
         color: "#16a34a",
       },
       {
@@ -125,6 +138,7 @@ const seriesConfigs: SeriesConfig[] = [
         format: "percent",
         chart: "line",
         aggregate: "cashflowSavingsRate",
+        polarity: "up-good",
         color: "#7c3aed",
       },
     ],
@@ -141,6 +155,7 @@ const seriesConfigs: SeriesConfig[] = [
         format: "money",
         chart: "area",
         aggregate: "point",
+        polarity: "up-good",
         color: "#2563eb",
       },
       {
@@ -150,6 +165,7 @@ const seriesConfigs: SeriesConfig[] = [
         format: "money",
         chart: "area",
         aggregate: "point",
+        polarity: "up-bad",
         color: "#dc2626",
       },
       {
@@ -159,6 +175,7 @@ const seriesConfigs: SeriesConfig[] = [
         format: "money",
         chart: "area",
         aggregate: "point",
+        polarity: "up-good",
         color: "#16a34a",
       },
       {
@@ -168,6 +185,7 @@ const seriesConfigs: SeriesConfig[] = [
         format: "ratio",
         chart: "line",
         aggregate: "point",
+        polarity: "up-good",
         color: "#7c3aed",
       },
     ],
@@ -184,7 +202,8 @@ const sliceConfigs: SliceConfig[] = [
   {
     key: "mom",
     label: "MoM",
-    description: "Month-over-month difference for each metric (green up, red down).",
+    description:
+      "Month-over-month difference for each metric. Green is a good move, red is a bad one, so rising expenses and liabilities read red.",
     comparisonLabel: "Previous month",
   },
   {
@@ -197,7 +216,8 @@ const sliceConfigs: SliceConfig[] = [
   {
     key: "yoyMonth",
     label: "YoY by month",
-    description: "Each month compared with the same month in the previous year.",
+    description:
+      "Each month plotted against the same month in the previous year. Use the arrows to change year.",
     comparisonLabel: "Same month last year",
   },
   {
@@ -273,6 +293,13 @@ function axisMonthLabel(month: string): string {
   const date = new Date(`${month.slice(0, 7)}-01T00:00:00`);
   if (Number.isNaN(date.getTime())) return month;
   return date.toLocaleDateString("en-AU", { month: "short", year: "2-digit" });
+}
+
+/** "Jan" — no year, because YoY charts put two different years on one tick. */
+function shortMonthLabel(month: string): string {
+  const date = new Date(`${month.slice(0, 7)}-01T00:00:00`);
+  if (Number.isNaN(date.getTime())) return month;
+  return date.toLocaleDateString("en-AU", { month: "short" });
 }
 
 function formatMetricValue(value: number | null, format: FormatKind): string {
@@ -380,7 +407,12 @@ function buildSlicePoints(
 
     if (slice === "ytd") {
       value = getYtdValue(rows, row, metric);
-      comparison = previousRow ? getYtdValue(rows, previousRow, metric) : null;
+      // Only compare against an earlier point in the same year. Without this,
+      // January compares its YTD (one month) against December's YTD (the whole
+      // prior year), which is a meaningless delta against an off-screen row.
+      const priorYtdRow =
+        previousRow && previousRow.year === row.year ? previousRow : null;
+      comparison = priorYtdRow ? getYtdValue(rows, priorYtdRow, metric) : null;
     } else if (slice === "yoyMonth") {
       value = row.values[metric.key] ?? null;
       comparison = sameMonthLastYear?.values[metric.key] ?? null;
@@ -599,18 +631,44 @@ function MetricTrendCard({
     filterYear !== null
       ? allPoints.filter((point) => point.year === filterYear)
       : allPoints;
-  // MoM and YoY-by-month plot the difference (delta), not the raw value.
-  const plotsDelta = slice.key === "mom" || slice.key === "yoyMonth";
-  const chartData: TrendChartData[] = points.map((point) => ({
-    month: point.axisLabel,
-    [metric.label]: plotsDelta ? point.change : point.value,
-  }));
+  // MoM plots the difference (delta), not the raw value.
+  const plotsDelta = slice.key === "mom";
+  // Both YoY slices plot the selected year and its comparison year side by side.
+  const plotsYearPair = slice.key === "yoyMonth" || slice.key === "yoyYtd";
+
+  const pairYear = filterYear ?? points[0]?.year ?? null;
+  const currentYearLabel = pairYear === null ? "This year" : String(pairYear);
+  const priorYearLabel = pairYear === null ? "Prior year" : String(pairYear - 1);
+
+  const chartData: TrendChartData[] = points.map((point) =>
+    plotsYearPair
+      ? {
+          month: shortMonthLabel(point.month),
+          [priorYearLabel]: point.comparison,
+          [currentYearLabel]: point.value,
+        }
+      : {
+          month: point.axisLabel,
+          [metric.label]: plotsDelta ? point.change : point.value,
+        },
+  );
+
+  // Prior year first so each group reads oldest to newest, muted to coloured.
+  const categories = plotsYearPair
+    ? [priorYearLabel, currentYearLabel]
+    : [metric.label];
+  const colors = plotsYearPair
+    ? [PRIOR_YEAR_COLOR, metric.color]
+    : [metric.color];
+
   const description =
     slice.key === "mom"
       ? "Change vs the previous month."
       : slice.key === "yoyMonth"
-        ? "Change vs the same month last year."
-        : metric.description;
+        ? `${currentYearLabel} vs ${priorYearLabel}, month by month.`
+        : slice.key === "yoyYtd"
+          ? `${currentYearLabel} year-to-date vs ${priorYearLabel} at the same point.`
+          : metric.description;
 
   return (
     <motion.div
@@ -625,7 +683,13 @@ function MetricTrendCard({
           <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent className="min-w-0 space-y-4">
-          <TrendChart metric={metric} data={chartData} momDelta={plotsDelta} />
+          <TrendChart
+            metric={metric}
+            data={chartData}
+            categories={categories}
+            colors={colors}
+            momDelta={plotsDelta}
+          />
           <TrendTable points={points} metric={metric} />
         </CardContent>
       </Card>
@@ -636,30 +700,47 @@ function MetricTrendCard({
 function TrendChart({
   metric,
   data,
+  categories,
+  colors,
   momDelta,
 }: {
   metric: MetricConfig;
   data: TrendChartData[];
+  categories: string[];
+  colors: string[];
   momDelta: boolean;
 }) {
   const props = {
     data,
     index: "month",
-    categories: [metric.label],
-    colors: [metric.color],
+    categories,
+    colors,
     valueFormatter: (value: number) => formatMetricValue(value, metric.format),
+    // Delta charts sign their tooltip values so +$120 reads as a rise.
+    tooltipFormatter: momDelta
+      ? (value: number) => formatSigned(value, metric.format)
+      : undefined,
   };
 
-  // MoM differences render as sign-coloured bars (green up / red down).
-  if (momDelta) return <BarChart {...props} colorBySign />;
+  // MoM differences render as bars coloured by whether the move was good or bad.
+  if (momDelta) {
+    return (
+      <BarChart
+        {...props}
+        colorBySign
+        invertSign={metric.polarity === "up-bad"}
+      />
+    );
+  }
   if (metric.chart === "bar") return <BarChart {...props} />;
   if (metric.chart === "area") return <AreaChart {...props} />;
   return <LineChart {...props} />;
 }
 
-function signClass(value: number | null): string {
+function signClass(value: number | null, polarity: Polarity): string {
   if (value === null || value === 0) return "text-muted-foreground";
-  return value > 0
+  const isGood = polarity === "up-bad" ? value < 0 : value > 0;
+  return isGood
     ? "text-emerald-600 dark:text-emerald-400"
     : "text-red-600 dark:text-red-400";
 }
@@ -671,6 +752,10 @@ function TrendTable({
   points: SlicePoint[];
   metric: MetricConfig;
 }) {
+  // Newest month first so the current month is visible without scrolling.
+  // The charts stay oldest-to-newest left to right.
+  const rowsNewestFirst = [...points].reverse();
+
   return (
     <div className="max-h-80 overflow-auto overflow-x-auto rounded-lg border">
       <Table>
@@ -683,19 +768,19 @@ function TrendTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {points.map((point) => (
+          {rowsNewestFirst.map((point) => (
             <TableRow key={point.month}>
               <TableCell className="font-medium">{point.monthLabel}</TableCell>
               <TableCell className="tabular text-right">
                 {formatMetricValue(point.value, metric.format)}
               </TableCell>
               <TableCell
-                className={`tabular text-right ${signClass(point.change)}`}
+                className={`tabular text-right ${signClass(point.change, metric.polarity)}`}
               >
                 {formatSigned(point.change, metric.format)}
               </TableCell>
               <TableCell
-                className={`tabular text-right ${signClass(point.changePercent)}`}
+                className={`tabular text-right ${signClass(point.changePercent, metric.polarity)}`}
               >
                 {formatChange(point.changePercent)}
               </TableCell>
