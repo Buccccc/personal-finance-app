@@ -22,6 +22,8 @@ const BRANDS: { match: RegExp; brand: BankBrand }[] = [
   { match: /(bendigo)/i, brand: { key: "ben", label: "BEN", bg: "#7A1F2B", fg: "#FFFFFF" } },
   { match: /(suncorp)/i, brand: { key: "sun", label: "SUN", bg: "#FFB81C", fg: "#1C1C1C" } },
   { match: /(st\.?\s?george|stgeorge)/i, brand: { key: "sgb", label: "STG", bg: "#00A04A", fg: "#FFFFFF" } },
+  // Wise's own palette: Bright Green on Forest Green, not the generic fallback.
+  { match: /(wise|transferwise)/i, brand: { key: "wise", label: "W", bg: "#9FE870", fg: "#163300" } },
 ];
 
 function initials(text: string): string {
