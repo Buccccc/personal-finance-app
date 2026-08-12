@@ -547,11 +547,14 @@ export type Database = {
           created_at: string
           date: string
           description: string | null
+          fx_rate: number | null
           human_verified: boolean
           id: string
           import_hash: string | null
           merchant_id: string | null
           notes: string | null
+          original_amount: number | null
+          original_currency: string | null
           subcategory_id: string | null
           tax_deductible: boolean
           transfer_group_id: string | null
@@ -570,11 +573,14 @@ export type Database = {
           created_at?: string
           date: string
           description?: string | null
+          fx_rate?: number | null
           human_verified?: boolean
           id?: string
           import_hash?: string | null
           merchant_id?: string | null
           notes?: string | null
+          original_amount?: number | null
+          original_currency?: string | null
           subcategory_id?: string | null
           tax_deductible?: boolean
           transfer_group_id?: string | null
@@ -593,11 +599,14 @@ export type Database = {
           created_at?: string
           date?: string
           description?: string | null
+          fx_rate?: number | null
           human_verified?: boolean
           id?: string
           import_hash?: string | null
           merchant_id?: string | null
           notes?: string | null
+          original_amount?: number | null
+          original_currency?: string | null
           subcategory_id?: string | null
           tax_deductible?: boolean
           transfer_group_id?: string | null

@@ -3,13 +3,16 @@
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
-import { UploadCloud, FileText, CheckCircle2 } from "lucide-react";
+import { UploadCloud, FileText, CheckCircle2, Info, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useAccounts } from "@/lib/hooks/accounts";
-import { formatMoney, formatDate } from "@/lib/format";
+import { useCategories } from "@/lib/hooks/categories";
+import { formatMoney, formatDate, formatForeignMoney } from "@/lib/format";
+import { detectFormat, parseImport, type ParseResult } from "@/lib/import";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -26,110 +29,24 @@ import {
 } from "@/components/ui/select";
 import type { TablesInsert } from "@/lib/supabase/types";
 
-type ParsedRow = {
-  date: string; // ISO yyyy-mm-dd
-  amount: number;
-  description: string;
-  balance: string;
-  type: "expense" | "income";
-  hash: string;
+const FORMAT_LABEL: Record<string, string> = {
+  commbank: "CommBank export",
+  wise: "Wise transaction history",
 };
-
-// Minimal CSV line splitter (handles quoted fields with commas).
-function splitCsvLine(line: string): string[] {
-  const out: string[] = [];
-  let field = "";
-  let inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (inQ) {
-      if (c === '"') {
-        if (line[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else inQ = false;
-      } else field += c;
-    } else if (c === '"') inQ = true;
-    else if (c === ",") {
-      out.push(field);
-      field = "";
-    } else field += c;
-  }
-  out.push(field);
-  return out;
-}
-
-function toIso(ddmmyyyy: string): string | null {
-  const m = ddmmyyyy.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!m) return null;
-  return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
-}
-
-// CommBank embeds the value date (when the card was tapped / payment made) in
-// the description, e.g. "...Card xx0079 Value Date: 02/06/2026". That reflects
-// true spending date better than the transaction date (when funds settle), so
-// prefer it when present.
-function extractValueDate(description: string): string | null {
-  const m = description.match(/Value Date:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i);
-  return m ? toIso(m[1]) : null;
-}
-
-function parseMoney(s: string): number | null {
-  const t = s.replace(/[^0-9.\-]/g, "");
-  if (t === "" || t === "-" || t === "+") return null;
-  const n = Number(t);
-  return Number.isNaN(n) ? null : n;
-}
-
-async function sha256Hex(input: string): Promise<string> {
-  const data = new TextEncoder().encode(input);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-async function parseCommbankCsv(
-  text: string,
-  accountId: string,
-): Promise<ParsedRow[]> {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
-  const rows: ParsedRow[] = [];
-  for (const line of lines) {
-    const cells = splitCsvLine(line);
-    if (cells.length < 3) continue;
-    const transactionDate = toIso(cells[0]);
-    if (!transactionDate) continue; // skips any header row (first cell not a date)
-    const amount = parseMoney(cells[1]);
-    if (amount === null) continue;
-    const description = (cells[2] ?? "").trim();
-    const balance = (cells[3] ?? "").trim();
-    // Use the value date when CommBank provides one; otherwise the transaction
-    // date is the value date.
-    const date = extractValueDate(description) ?? transactionDate;
-    const hash = await sha256Hex(
-      `${accountId}|${date}|${amount}|${description}|${balance}`,
-    );
-    rows.push({
-      date,
-      amount,
-      description,
-      balance,
-      type: amount < 0 ? "expense" : "income",
-      hash,
-    });
-  }
-  return rows;
-}
 
 export function CsvImporter() {
   const accounts = useAccounts();
+  const categories = useCategories();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [accountId, setAccountId] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
-  const [parsed, setParsed] = useState<ParsedRow[] | null>(null);
+  const [pendingFile, setPendingFile] = useState<{ text: string; name: string } | null>(
+    null,
+  );
+  const [walletBalance, setWalletBalance] = useState("");
+  const [parsed, setParsed] = useState<ParseResult | null>(null);
   const [newHashes, setNewHashes] = useState<Set<string> | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ imported: number; skipped: number } | null>(
@@ -138,26 +55,32 @@ export function CsvImporter() {
 
   const accountOptions = accounts.data ?? [];
   const hasAccounts = accountOptions.length > 0;
+  const needsWalletBalance = pendingFile
+    ? detectFormat(pendingFile.text) === "wise"
+    : false;
 
   const summary = useMemo(() => {
     if (!parsed) return null;
-    const income = parsed
-      .filter((r) => r.amount > 0)
-      .reduce((s, r) => s + r.amount, 0);
-    const expenses = parsed
-      .filter((r) => r.amount < 0)
-      .reduce((s, r) => s + r.amount, 0);
-    const dates = parsed.map((r) => r.date).sort();
+    const rows = parsed.rows;
+    const income = rows.filter((r) => r.amount > 0).reduce((s, r) => s + r.amount, 0);
+    const expenses = rows.filter((r) => r.amount < 0).reduce((s, r) => s + r.amount, 0);
+    const dates = rows.map((r) => r.date).sort();
+    const currencies = [
+      ...new Set(rows.map((r) => r.originalCurrency).filter(Boolean) as string[]),
+    ];
     return {
-      count: parsed.length,
+      count: rows.length,
       income,
       expenses,
       from: dates[0],
       to: dates[dates.length - 1],
+      currencies,
+      flagged: rows.filter((r) => r.flag),
     };
   }, [parsed]);
 
-  async function handleFile(file: File) {
+  /** Read + parse, then work out which rows are new (dedupe preview). */
+  async function runParse(text: string, name: string) {
     if (!accountId) {
       toast.error("Choose an account first.");
       return;
@@ -165,20 +88,26 @@ export function CsvImporter() {
     setResult(null);
     setBusy(true);
     try {
-      const text = await file.text();
-      const rows = await parseCommbankCsv(text, accountId);
-      if (!rows.length) {
-        toast.error("No transactions found. Is this a CommBank CSV export?");
+      const balance = walletBalance.trim() === "" ? null : Number(walletBalance);
+      if (balance !== null && Number.isNaN(balance)) {
+        toast.error("Wallet balance must be a number.");
+        return;
+      }
+      const res = await parseImport(text, {
+        accountId,
+        currentBalanceAud: balance,
+      });
+      if (!res.rows.length) {
+        toast.error("No transactions found in that file.");
         setParsed(null);
         setNewHashes(null);
         return;
       }
-      setFileName(file.name);
-      setParsed(rows);
+      setFileName(name);
+      setParsed(res);
 
-      // Figure out which rows are new vs already imported (dedupe preview).
       const supabase = createClient();
-      const hashes = rows.map((r) => r.hash);
+      const hashes = res.rows.map((r) => r.hash);
       const existing = new Set<string>();
       for (let i = 0; i < hashes.length; i += 300) {
         const { data, error } = await supabase
@@ -198,12 +127,45 @@ export function CsvImporter() {
     }
   }
 
+  async function handleFile(file: File) {
+    if (!accountId) {
+      toast.error("Choose an account first.");
+      return;
+    }
+    const text = await file.text();
+    setPendingFile({ text, name: file.name });
+    setParsed(null);
+    setNewHashes(null);
+    // Wise ships no running balance, so it needs the wallet total from the app
+    // before it can book the closing FX revaluation. Wait for that input.
+    if (detectFormat(text) === "wise" && walletBalance.trim() === "") {
+      setFileName(file.name);
+      return;
+    }
+    await runParse(text, file.name);
+  }
+
+  /**
+   * Match the export's own category name against the user's categories,
+   * preferring one whose kind matches the row so an expense never lands on an
+   * income-kind category.
+   */
+  function resolveCategoryId(name: string | null | undefined, kind: string) {
+    if (!name) return null;
+    const list = categories.data ?? [];
+    const matches = list.filter(
+      (c) => c.name.toLowerCase() === name.toLowerCase().trim(),
+    );
+    if (!matches.length) return null;
+    return (matches.find((c) => c.kind === kind) ?? matches[0]).id;
+  }
+
   async function doImport() {
     if (!parsed || !newHashes || !accountId) return;
     setBusy(true);
     try {
       const supabase = createClient();
-      const toInsert = parsed.filter((r) => newHashes.has(r.hash));
+      const toInsert = parsed.rows.filter((r) => newHashes.has(r.hash));
       const rows: TablesInsert<"transactions">[] = toInsert.map((r) => ({
         account_id: accountId,
         date: r.date,
@@ -211,6 +173,11 @@ export function CsvImporter() {
         amount: r.amount,
         type: r.type,
         import_hash: r.hash,
+        original_amount: r.originalAmount ?? null,
+        original_currency: r.originalCurrency ?? null,
+        fx_rate: r.fxRate ?? null,
+        category_id: resolveCategoryId(r.suggestedCategory, r.type),
+        notes: r.flag ?? null,
       }));
 
       let imported = 0;
@@ -226,30 +193,27 @@ export function CsvImporter() {
         imported += batch.length;
       }
 
-      // Set the account balance authoritatively from the most recent row's
-      // running balance (CommBank exports include it, for cards too — negative
-      // when owing). Imported rows don't increment via the DB trigger, so this
-      // is the source of truth. Then re-sync net worth from balances.
-      const latest = [...parsed].sort((a, b) =>
-        b.date.localeCompare(a.date),
-      )[0];
-      const latestBalance = latest ? parseMoney(latest.balance) : null;
-      if (latestBalance !== null) {
+      // Set the account balance authoritatively from the export. CommBank
+      // carries a running balance; Wise reports the wallet total, which the
+      // parser has already tied the rows to. Imported rows don't increment via
+      // the DB trigger, so this is the source of truth. Then re-sync net worth.
+      if (parsed.closingBalance !== null) {
         await supabase
           .from("accounts")
-          .update({ balance: latestBalance })
+          .update({ balance: parsed.closingBalance })
           .eq("id", accountId);
       }
       await supabase.rpc("sync_account_networth");
 
-      const skipped = parsed.length - imported;
+      const skipped = parsed.rows.length - imported;
       setResult({ imported, skipped });
       toast.success(`Imported ${imported} transaction(s).`);
       await queryClient.invalidateQueries();
-      // reset the file selection but keep the result visible
       setParsed(null);
       setNewHashes(null);
       setFileName(null);
+      setPendingFile(null);
+      setWalletBalance("");
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Import failed.");
@@ -259,13 +223,13 @@ export function CsvImporter() {
   }
 
   const newCount = newHashes?.size ?? 0;
-  const dupCount = parsed ? parsed.length - newCount : 0;
+  const dupCount = parsed ? parsed.rows.length - newCount : 0;
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Import"
-        description="Import a CommBank CSV export. Duplicates are detected automatically, and new transactions arrive uncategorised so Review and your rules can sort them."
+        description="Import a CommBank or Wise CSV export — the format is detected from the file. Foreign-currency spending is converted to AUD at the rate you actually paid. Duplicates are detected automatically, and new transactions arrive ready for Review."
       />
 
       {!hasAccounts ? (
@@ -341,16 +305,45 @@ export function CsvImporter() {
                   </p>
                 )}
               </div>
+
+              {needsWalletBalance && (
+                <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                  <p className="text-sm font-medium">Wise wallet balance (AUD)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Wise exports carry no running balance. Enter the total the
+                    Wise app shows so leftover foreign currency can be valued and
+                    the FX movement booked.
+                  </p>
+                  <Input
+                    inputMode="decimal"
+                    placeholder="557.92"
+                    value={walletBalance}
+                    onChange={(e) => setWalletBalance(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    disabled={busy || walletBalance.trim() === ""}
+                    onClick={() => {
+                      if (pendingFile)
+                        void runParse(pendingFile.text, pendingFile.name);
+                    }}
+                  >
+                    {parsed ? "Re-read file" : "Read file"}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">3. Review & import</CardTitle>
+              <CardTitle className="text-base">3. Review &amp; import</CardTitle>
               <CardDescription>
                 {fileName ? (
                   <span className="inline-flex items-center gap-1.5">
                     <FileText className="h-3.5 w-3.5" /> {fileName}
+                    {parsed ? ` — ${FORMAT_LABEL[parsed.format] ?? parsed.format}` : ""}
                   </span>
                 ) : (
                   "No file loaded yet."
@@ -376,7 +369,7 @@ export function CsvImporter() {
                 </div>
               ) : null}
 
-              {summary ? (
+              {summary && parsed ? (
                 <>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <Stat label="Rows" value={String(summary.count)} />
@@ -392,39 +385,84 @@ export function CsvImporter() {
                       small
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Stat
-                      label="Income"
-                      value={formatMoney(summary.income)}
-                    />
-                    <Stat
-                      label="Expenses"
-                      value={formatMoney(summary.expenses)}
-                    />
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <Stat label="Income" value={formatMoney(summary.income)} />
+                    <Stat label="Expenses" value={formatMoney(summary.expenses)} />
+                    {parsed.closingBalance !== null && (
+                      <Stat
+                        label="Closing balance"
+                        value={formatMoney(parsed.closingBalance)}
+                      />
+                    )}
+                    {summary.currencies.length > 0 && (
+                      <Stat
+                        label="Currencies"
+                        value={summary.currencies.join(", ")}
+                        small
+                      />
+                    )}
                   </div>
+
+                  {parsed.notes.length > 0 && (
+                    <div className="space-y-1.5 rounded-lg border bg-muted/20 p-3">
+                      {parsed.notes.map((n, i) => (
+                        <p
+                          key={i}
+                          className="flex items-start gap-2 text-xs text-muted-foreground"
+                        >
+                          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          {n}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  {summary.flagged.length > 0 && (
+                    <div className="space-y-1.5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+                      {summary.flagged.map((r, i) => (
+                        <p key={i} className="flex items-start gap-2 text-xs">
+                          <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+                          <span>
+                            <span className="font-medium">
+                              {formatDate(r.date)} {r.description}
+                            </span>{" "}
+                            — {r.flag}
+                          </span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
 
                   <div className="rounded-lg border">
                     <div className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">
                       Preview (first 6)
                     </div>
                     <div className="divide-y">
-                      {parsed!.slice(0, 6).map((r, i) => (
+                      {parsed.rows.slice(0, 6).map((r, i) => (
                         <div
                           key={i}
                           className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
                         >
-                          <span className="text-muted-foreground tabular">
+                          <span className="tabular text-muted-foreground">
                             {formatDate(r.date)}
                           </span>
                           <span className="min-w-0 flex-1 truncate">
                             {r.description}
                           </span>
-                          <span
-                            className={`tabular shrink-0 ${
-                              r.amount < 0 ? "text-red-600" : "text-emerald-600"
-                            }`}
-                          >
-                            {formatMoney(r.amount)}
+                          <span className="shrink-0 text-right">
+                            <span
+                              className={`tabular block ${
+                                r.amount < 0 ? "text-red-600" : "text-emerald-600"
+                              }`}
+                            >
+                              {formatMoney(r.amount)}
+                            </span>
+                            {r.originalAmount != null && r.originalCurrency && (
+                              <span className="tabular block text-xs text-muted-foreground">
+                                {formatForeignMoney(r.originalAmount, r.originalCurrency)}
+                                {r.fxRate ? ` @ ${r.fxRate.toFixed(4)}` : ""}
+                              </span>
+                            )}
                           </span>
                         </div>
                       ))}
@@ -445,7 +483,9 @@ export function CsvImporter() {
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Choose an account and drop a CommBank CSV to preview it here.
+                  {needsWalletBalance
+                    ? "Wise file loaded. Enter the wallet balance on the left to read it."
+                    : "Choose an account and drop a CommBank or Wise CSV to preview it here."}
                 </p>
               )}
             </CardContent>

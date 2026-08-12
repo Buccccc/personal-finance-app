@@ -57,7 +57,7 @@ import {
   type TransactionSortDirection,
   type TransactionSortField,
 } from "@/lib/hooks/transactions";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatForeignMoney, formatMoney } from "@/lib/format";
 import { AccountBadge } from "@/components/account-badge";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -516,10 +516,21 @@ export function TransactionsFeed() {
               : row.original.type === "expense"
                 ? "text-red-600"
                 : "text-foreground";
+          const { original_amount, original_currency, fx_rate } = row.original;
 
           return (
-            <span className={`font-medium tabular ${color}`}>
-              {formatMoney(row.original.amount)}
+            <span className="block">
+              <span className={`block font-medium tabular ${color}`}>
+                {formatMoney(row.original.amount)}
+              </span>
+              {original_amount != null && original_currency ? (
+                // Foreign spend: show what was actually charged, and the rate it
+                // was converted at, so the AUD figure is never a black box.
+                <span className="block text-xs tabular text-muted-foreground">
+                  {formatForeignMoney(original_amount, original_currency)}
+                  {fx_rate ? ` @ ${Number(fx_rate).toFixed(4)}` : ""}
+                </span>
+              ) : null}
             </span>
           );
         },

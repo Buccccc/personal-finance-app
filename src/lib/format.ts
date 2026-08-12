@@ -14,6 +14,28 @@ export function formatMoney(value: number | string | null | undefined): string {
   return AUD.format(n);
 }
 
+/**
+ * Money in a currency other than AUD, e.g. "NZ$34.27". Used for foreign
+ * spending, where the AUD figure is the reporting value and this is what was
+ * actually charged. Falls back to a code suffix for unknown currencies.
+ */
+export function formatForeignMoney(
+  value: number | string | null | undefined,
+  currency: string,
+): string {
+  const n = typeof value === "string" ? Number(value) : (value ?? 0);
+  if (Number.isNaN(n)) return `0 ${currency}`;
+  try {
+    return new Intl.NumberFormat("en-AU", {
+      style: "currency",
+      currency,
+      currencyDisplay: "narrowSymbol",
+    }).format(n);
+  } catch {
+    return `${n.toFixed(2)} ${currency}`;
+  }
+}
+
 /** Percent from a 0..1 ratio, e.g. 0.34 -> "34.0%". null -> "—". */
 export function formatPercent(
   ratio: number | string | null | undefined,

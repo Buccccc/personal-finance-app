@@ -46,3 +46,6 @@ PROGRESS.md
 
 # never commit financial CSV exports (bank data)
 *.csv
+
+# local data backups (never commit)
+/.backups/
