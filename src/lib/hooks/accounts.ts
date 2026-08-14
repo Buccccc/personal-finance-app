@@ -20,11 +20,88 @@ export type AccountInsert = Omit<
 >;
 export type AccountUpdate = Pick<
   TablesUpdate<"accounts">,
-  "name" | "type" | "institution" | "currency" | "balance" | "credit_limit"
+  | "name"
+  | "type"
+  | "institution"
+  | "currency"
+  | "balance"
+  | "opening_balance"
+  | "credit_limit"
 >;
+
+/** One row of per-account health: invariant, bank drift, and flags. */
+export type AccountReconciliation = Tables<"account_reconciliation_view">;
 
 export const accountsQueryKey = ["accounts"] as const;
 export const accountTxnTotalsQueryKey = ["account-txn-totals"] as const;
+export const accountReconciliationQueryKey = ["account-reconciliation"] as const;
+
+/**
+ * Flag copy. `errors` are states that should not be possible and point at a
+ * real problem; `notices` are hygiene. Both come from
+ * account_reconciliation_view so the rules live in one place (the DB) rather
+ * than being re-implemented per client.
+ */
+export const reconciliationFlagCopy: Record<string, string> = {
+  invariant_broken:
+    "Stored balance disagrees with opening balance plus transactions. Something wrote around the triggers.",
+  negative_asset:
+    "An asset account cannot hold less than nothing. The balance or the history is wrong.",
+  over_limit: "Owing more than the credit limit.",
+  reconcile_drift:
+    "The ledger disagrees with the balance the bank actually showed. Transactions are missing or duplicated.",
+  credit_card_in_credit: "Card is in credit rather than owing.",
+  never_reconciled: "Never checked against the real bank balance.",
+  txns_since_reconcile: "New transactions since the last check.",
+  stale_reconcile: "Last checked against the bank over 90 days ago.",
+};
+
+export function useAccountReconciliation() {
+  return useQuery({
+    queryKey: accountReconciliationQueryKey,
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("account_reconciliation_view")
+        .select("*")
+        .order("name", { ascending: true });
+      if (error) throw new Error(error.message);
+      const map = new Map<string, AccountReconciliation>();
+      for (const row of data ?? []) {
+        if (row.account_id) map.set(row.account_id, row);
+      }
+      return map;
+    },
+  });
+}
+
+/**
+ * Record what the bank actually showed on a given date. Nothing here touches
+ * `balance` — the point is to compare against it, not overwrite it.
+ */
+export function useReconcileAccount() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      balance,
+      date,
+    }: {
+      id: Account["id"];
+      balance: number | null;
+      date: string | null;
+    }) => {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("accounts")
+        .update({ reconciled_balance: balance, reconciled_at: date })
+        .eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => queryClient.invalidateQueries(),
+  });
+}
 
 /** Recompute today's E-Cash / Savings / credit-card-debt net worth from balances. */
 export async function syncAccountNetworth() {

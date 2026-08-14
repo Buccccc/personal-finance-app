@@ -24,6 +24,9 @@ export type Database = {
           id: string
           institution: string | null
           name: string
+          opening_balance: number
+          reconciled_at: string | null
+          reconciled_balance: number | null
           type: string
           updated_at: string
           user_id: string
@@ -37,6 +40,9 @@ export type Database = {
           id?: string
           institution?: string | null
           name: string
+          opening_balance?: number
+          reconciled_at?: string | null
+          reconciled_balance?: number | null
           type: string
           updated_at?: string
           user_id?: string
@@ -50,6 +56,9 @@ export type Database = {
           id?: string
           institution?: string | null
           name?: string
+          opening_balance?: number
+          reconciled_at?: string | null
+          reconciled_balance?: number | null
           type?: string
           updated_at?: string
           user_id?: string
@@ -689,6 +698,32 @@ export type Database = {
       }
     }
     Views: {
+      account_reconciliation_view: {
+        Row: {
+          account_id: string | null
+          balance: number | null
+          credit_limit: number | null
+          currency: string | null
+          days_since_reconciled: number | null
+          errors: string[] | null
+          expected_balance: number | null
+          institution: string | null
+          invariant_drift: number | null
+          last_txn_date: string | null
+          ledger_at_reconcile: number | null
+          name: string | null
+          notices: string[] | null
+          opening_balance: number | null
+          reconcile_drift: number | null
+          reconciled_at: string | null
+          reconciled_balance: number | null
+          txn_count: number | null
+          txn_total: number | null
+          type: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
       account_txn_totals_view: {
         Row: {
           account_id: string | null
@@ -760,6 +795,10 @@ export type Database = {
       link_split_bill: {
         Args: { p_expense_id: string; p_income_ids: string[] }
         Returns: string
+      }
+      recompute_account_balance: {
+        Args: { p_account_id: string }
+        Returns: undefined
       }
       sync_account_networth: {
         Args: Record<PropertyKey, never>

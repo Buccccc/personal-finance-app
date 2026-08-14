@@ -195,8 +195,11 @@ export function CsvImporter() {
 
       // Set the account balance authoritatively from the export. CommBank
       // carries a running balance; Wise reports the wallet total, which the
-      // parser has already tied the rows to. Imported rows don't increment via
-      // the DB trigger, so this is the source of truth. Then re-sync net worth.
+      // parser has already tied the rows to. Since 0026 this write means "this
+      // is the true balance now": the DB back-solves opening_balance so
+      // balance = opening_balance + sum(transactions) still holds, which is
+      // what stops imported history from drifting the balance. Then re-sync
+      // net worth.
       if (parsed.closingBalance !== null) {
         await supabase
           .from("accounts")
