@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       accounts: {
         Row: {
+          active: boolean
           balance: number
           basiq_account_id: string | null
           created_at: string
@@ -27,11 +28,14 @@ export type Database = {
           opening_balance: number
           reconciled_at: string | null
           reconciled_balance: number | null
+          status_note: string | null
           type: string
+          unreachable: boolean
           updated_at: string
           user_id: string
         }
         Insert: {
+          active?: boolean
           balance?: number
           basiq_account_id?: string | null
           created_at?: string
@@ -43,11 +47,14 @@ export type Database = {
           opening_balance?: number
           reconciled_at?: string | null
           reconciled_balance?: number | null
+          status_note?: string | null
           type: string
+          unreachable?: boolean
           updated_at?: string
           user_id?: string
         }
         Update: {
+          active?: boolean
           balance?: number
           basiq_account_id?: string | null
           created_at?: string
@@ -59,7 +66,9 @@ export type Database = {
           opening_balance?: number
           reconciled_at?: string | null
           reconciled_balance?: number | null
+          status_note?: string | null
           type?: string
+          unreachable?: boolean
           updated_at?: string
           user_id?: string
         }
@@ -701,6 +710,7 @@ export type Database = {
       account_reconciliation_view: {
         Row: {
           account_id: string | null
+          active: boolean | null
           balance: number | null
           credit_limit: number | null
           currency: string | null
@@ -717,9 +727,11 @@ export type Database = {
           reconcile_drift: number | null
           reconciled_at: string | null
           reconciled_balance: number | null
+          status_note: string | null
           txn_count: number | null
           txn_total: number | null
           type: string | null
+          unreachable: boolean | null
           user_id: string | null
         }
         Relationships: []

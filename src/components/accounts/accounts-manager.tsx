@@ -2,8 +2,11 @@
 
 import { useState, type FormEvent } from "react";
 import {
+  BanIcon,
   CircleCheckIcon,
   Edit2Icon,
+  EyeIcon,
+  EyeOffIcon,
   PlusIcon,
   ScaleIcon,
   Trash2Icon,
@@ -27,6 +30,8 @@ import {
 import { AccountBadge } from "@/components/account-badge";
 import { bankBrand } from "@/lib/bank-brand";
 import { formatDate, formatMoney } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -64,6 +69,9 @@ type AccountFormState = {
   balance: string;
   openingBalance: string;
   creditLimit: string;
+  active: boolean;
+  unreachable: boolean;
+  statusNote: string;
 };
 
 const emptyAccountForm: AccountFormState = {
@@ -74,6 +82,9 @@ const emptyAccountForm: AccountFormState = {
   balance: "",
   openingBalance: "",
   creditLimit: "",
+  active: true,
+  unreachable: false,
+  statusNote: "",
 };
 
 /** Today in Melbourne, as YYYY-MM-DD, for defaulting the reconcile date. */
@@ -92,6 +103,9 @@ function accountToForm(account: Account): AccountFormState {
     balance: String(account.balance ?? 0),
     openingBalance: String(account.opening_balance ?? 0),
     creditLimit: account.credit_limit === null ? "" : String(account.credit_limit),
+    active: account.active ?? true,
+    unreachable: account.unreachable ?? false,
+    statusNote: account.status_note ?? "",
   };
 }
 
@@ -114,6 +128,9 @@ function normaliseAccountForm(form: AccountFormState, original: Account | null) 
     currency: form.currency.trim().toUpperCase() || "AUD",
     credit_limit:
       creditLimit !== null && Number.isFinite(creditLimit) ? creditLimit : null,
+    active: form.active,
+    unreachable: form.unreachable,
+    status_note: form.statusNote.trim() || null,
   };
 
   const safeBalance = Number.isFinite(balance) ? balance : 0;
@@ -144,11 +161,39 @@ export function AccountsManager() {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [deletingAccount, setDeletingAccount] = useState<Account | null>(null);
   const [reconcilingAccount, setReconcilingAccount] = useState<Account | null>(null);
+  // Inactive accounts are hidden by default; they are clutter, not news.
+  const [showInactive, setShowInactive] = useState(false);
 
   const checks = reconciliation.data;
-  const flagged = (accounts.data ?? []).filter((account) =>
+  const allAccounts = accounts.data ?? [];
+  const inactiveCount = allAccounts.filter((a) => a.active === false).length;
+  // Hiding is presentation only. Balances, transactions and net worth are
+  // untouched by this filter — an account you ignore still holds your money.
+  const visibleAccounts = showInactive
+    ? allAccounts
+    : allAccounts.filter((a) => a.active !== false);
+  const flagged = allAccounts.filter((account) =>
     hasErrors(checks?.get(account.id)),
   );
+
+  const toggleActive = async (account: Account) => {
+    const nextActive = account.active === false;
+    try {
+      await updateAccount.mutateAsync({
+        id: account.id,
+        account: { active: nextActive },
+      });
+      toast.success(
+        nextActive
+          ? `${account.name} marked active`
+          : `${account.name} marked inactive`,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not update account",
+      );
+    }
+  };
 
   const openCreateDialog = () => {
     setEditingAccount(null);
@@ -181,10 +226,23 @@ export function AccountsManager() {
             Manage the bank, card, cash, and e-cash accounts used by your transactions.
           </p>
         </div>
-        <Button onClick={openCreateDialog}>
-          <PlusIcon />
-          Add account
-        </Button>
+        <div className="flex items-center gap-2">
+          {inactiveCount > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setShowInactive((value) => !value)}
+            >
+              {showInactive ? <EyeOffIcon /> : <EyeIcon />}
+              {showInactive
+                ? "Hide inactive"
+                : `Show ${inactiveCount} inactive`}
+            </Button>
+          )}
+          <Button onClick={openCreateDialog}>
+            <PlusIcon />
+            Add account
+          </Button>
+        </div>
       </div>
 
       {flagged.length > 0 && (
@@ -233,12 +291,15 @@ export function AccountsManager() {
 
       {accounts.isLoading ? (
         <AccountsSkeleton />
-      ) : accounts.data && accounts.data.length > 0 ? (
+      ) : visibleAccounts.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {accounts.data.map((account) => (
+          {visibleAccounts.map((account) => (
             <Card
               key={account.id}
-              className="lift border-l-4"
+              className={cn(
+                "lift border-l-4",
+                account.active === false && "opacity-60",
+              )}
               style={{
                 borderLeftColor: bankBrand(account.name, account.institution)
                   .bg,
@@ -256,6 +317,18 @@ export function AccountsManager() {
                   {account.institution || "No institution saved"}
                 </CardDescription>
                 <CardAction className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={
+                      account.active === false
+                        ? `Mark ${account.name} active`
+                        : `Mark ${account.name} inactive`
+                    }
+                    onClick={() => toggleActive(account)}
+                  >
+                    {account.active === false ? <EyeIcon /> : <EyeOffIcon />}
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -321,6 +394,21 @@ export function AccountsManager() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">{formatAccountType(account.type)}</Badge>
                   <Badge variant="outline">{account.currency}</Badge>
+                  {account.unreachable && (
+                    <Badge
+                      variant="outline"
+                      className="gap-1 border-amber-500/50 text-amber-700 dark:text-amber-400"
+                    >
+                      <BanIcon className="size-3" />
+                      No transfers
+                    </Badge>
+                  )}
+                  {account.active === false && (
+                    <Badge variant="outline" className="gap-1">
+                      <EyeOffIcon className="size-3" />
+                      Inactive
+                    </Badge>
+                  )}
                   {hasErrors(checks?.get(account.id)) && (
                     <Badge variant="destructive" className="gap-1">
                       <TriangleAlertIcon className="size-3" />
@@ -328,6 +416,11 @@ export function AccountsManager() {
                     </Badge>
                   )}
                 </div>
+                {account.status_note && (
+                  <p className="text-xs text-muted-foreground">
+                    {account.status_note}
+                  </p>
+                )}
                 <ReconcileSummary row={checks?.get(account.id)} />
               </CardContent>
             </Card>
@@ -706,6 +799,53 @@ function AccountFormDialog({
                 }
                 maxLength={3}
                 placeholder="AUD"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-lg border p-3">
+            <label className="flex items-start justify-between gap-3 text-sm">
+              <span>
+                <span className="font-medium">In use</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Turning this off hides the account by default. Its balance
+                  still counts towards net worth.
+                </span>
+              </span>
+              <Switch
+                checked={form.active}
+                onCheckedChange={(checked) =>
+                  setForm((current) => ({ ...current, active: checked }))
+                }
+              />
+            </label>
+            <label className="flex items-start justify-between gap-3 text-sm">
+              <span>
+                <span className="font-medium">Can&apos;t transfer to it</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  The bank no longer allows money in or out, but the account
+                  still exists.
+                </span>
+              </span>
+              <Switch
+                checked={form.unreachable}
+                onCheckedChange={(checked) =>
+                  setForm((current) => ({ ...current, unreachable: checked }))
+                }
+              />
+            </label>
+            <div className="space-y-2">
+              <Label htmlFor="account-status-note">Status note</Label>
+              <Input
+                id="account-status-note"
+                value={form.statusNote}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    statusNote: event.target.value,
+                  }))
+                }
+                placeholder="Why is it inactive or unreachable?"
               />
             </div>
           </div>

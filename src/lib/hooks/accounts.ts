@@ -27,6 +27,9 @@ export type AccountUpdate = Pick<
   | "balance"
   | "opening_balance"
   | "credit_limit"
+  | "active"
+  | "unreachable"
+  | "status_note"
 >;
 
 /** One row of per-account health: invariant, bank drift, and flags. */
@@ -52,6 +55,10 @@ export const reconciliationFlagCopy: Record<string, string> = {
     "The ledger disagrees with the balance the bank actually showed. Transactions are missing or duplicated.",
   credit_card_in_credit: "Card is in credit rather than owing.",
   never_reconciled: "Never checked against the real bank balance.",
+  no_transfers:
+    "The bank no longer allows transfers to or from this account. Money already in it is still counted.",
+  inactive:
+    "Marked as not in use. Hidden from the accounts list by default; still counted in net worth.",
   txns_since_reconcile: "New transactions since the last check.",
   stale_reconcile: "Last checked against the bank over 90 days ago.",
 };
