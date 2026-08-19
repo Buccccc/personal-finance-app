@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -34,16 +34,22 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/app-shell/page-header";
 import {
+  formatDate,
+  formatForeignMoney,
   formatMoney,
   formatMonth,
   formatPercent,
   formatRatio,
 } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import {
   getMonthKey,
   getMonthOffset,
   getRelativeMonthKey,
+  useCategoryTransactions,
   useDashboardData,
+  type CategoryBreakdownType,
+  type CategoryTransaction,
   type MonthlyCashflow,
   type MonthlyCategoryBreakdown,
   type NetWorthCurrent,
@@ -55,6 +61,7 @@ import {
 } from "@/lib/hooks/net-worth";
 
 type CategoryChartItem = {
+  categoryId: string | null;
   name: string;
   value: number;
   txnCount: number;
@@ -121,6 +128,7 @@ function categoryRowsToChartItems(
       const name = row.category_name ?? "Uncategorised";
 
       return {
+        categoryId: row.category_id,
         name,
         value,
         txnCount: row.txn_count ?? 0,
@@ -263,19 +271,23 @@ export function DashboardView() {
       <div className="grid gap-4 xl:grid-cols-2">
         <CategoryBreakdownCard
           title="Expenses by category"
-          description={`Where money went in ${monthLabel}.`}
+          description={`Where money went in ${monthLabel}. Select a category to see its transactions.`}
           emptyTitle="No expenses for this month"
           emptyDescription="There are no expense categories to show for the selected month."
           items={expenseItems}
           isLoading={dashboard.isLoading}
+          monthKey={monthKey}
+          type="expense"
         />
         <CategoryBreakdownCard
           title="Income by category"
-          description={`Where money came from in ${monthLabel}.`}
+          description={`Where money came from in ${monthLabel}. Select a category to see its transactions.`}
           emptyTitle="No income for this month"
           emptyDescription="There are no income categories to show for the selected month."
           items={incomeItems}
           isLoading={dashboard.isLoading}
+          monthKey={monthKey}
+          type="income"
         />
       </div>
 
@@ -534,6 +546,8 @@ function NetWorthColumn({
   );
 }
 
+const collapsedCategoryCount = 6;
+
 function CategoryBreakdownCard({
   title,
   description,
@@ -541,6 +555,8 @@ function CategoryBreakdownCard({
   emptyDescription,
   items,
   isLoading,
+  monthKey,
+  type,
 }: {
   title: string;
   description: string;
@@ -548,8 +564,28 @@ function CategoryBreakdownCard({
   emptyDescription: string;
   items: CategoryChartItem[];
   isLoading: boolean;
+  monthKey: string;
+  type: CategoryBreakdownType;
 }) {
   const total = items.reduce((sum, item) => sum + item.value, 0);
+  // Keyed by category id; "uncategorised" stands in for the null category.
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const [seenMonth, setSeenMonth] = useState(monthKey);
+
+  // A month change can drop the open category out of the list entirely, so
+  // collapse back to the default view. Adjusting during render rather than in
+  // an effect avoids rendering the stale expansion once first.
+  if (seenMonth !== monthKey) {
+    setSeenMonth(monthKey);
+    setExpandedKey(null);
+    setShowAll(false);
+  }
+
+  const visibleItems = showAll
+    ? items
+    : items.slice(0, collapsedCategoryCount);
+  const hiddenCount = items.length - visibleItems.length;
 
   return (
     <motion.div
@@ -633,30 +669,41 @@ function CategoryBreakdownCard({
               </div>
 
               <div className="space-y-2">
-                {items.slice(0, 6).map((item, index) => (
-                  <div
-                    key={item.name}
-                    className="flex items-center justify-between gap-3 rounded-lg border bg-muted/20 px-3 py-2 text-sm"
+                {visibleItems.map((item, index) => {
+                  const key = item.categoryId ?? "uncategorised";
+
+                  return (
+                    <CategoryRow
+                      key={key}
+                      item={item}
+                      colour={chartColours[index % chartColours.length]}
+                      share={total > 0 ? item.value / total : 0}
+                      monthKey={monthKey}
+                      type={type}
+                      isExpanded={expandedKey === key}
+                      onToggle={() =>
+                        setExpandedKey((current) =>
+                          current === key ? null : key,
+                        )
+                      }
+                    />
+                  );
+                })}
+
+                {(hiddenCount > 0 || showAll) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-muted-foreground"
+                    onClick={() => setShowAll((value) => !value)}
                   >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span
-                        className="size-2.5 shrink-0 rounded-full"
-                        style={{
-                          backgroundColor:
-                            chartColours[index % chartColours.length],
-                        }}
-                      />
-                      <span className="truncate">{item.name}</span>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <div className="font-medium">{formatMoney(item.value)}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {Math.round((item.value / total) * 100)}% -{" "}
-                        {item.txnCount} txns
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                    {showAll
+                      ? "Show top 6"
+                      : `Show ${hiddenCount} more ${
+                          hiddenCount === 1 ? "category" : "categories"
+                        }`}
+                  </Button>
+                )}
               </div>
             </div>
           ) : (
@@ -665,6 +712,130 @@ function CategoryBreakdownCard({
         </CardContent>
       </Card>
     </motion.div>
+  );
+}
+
+function CategoryRow({
+  item,
+  colour,
+  share,
+  monthKey,
+  type,
+  isExpanded,
+  onToggle,
+}: {
+  item: CategoryChartItem;
+  colour: string;
+  share: number;
+  monthKey: string;
+  type: CategoryBreakdownType;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  // Only hits the network once the row is opened, and stays cached after.
+  const transactions = useCategoryTransactions(
+    { monthKey, type, categoryId: item.categoryId },
+    isExpanded,
+  );
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border bg-muted/20 transition-colors",
+        isExpanded && "bg-muted/40",
+      )}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isExpanded}
+        className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <ChevronDown
+            className={cn(
+              "size-4 shrink-0 text-muted-foreground transition-transform",
+              !isExpanded && "-rotate-90",
+            )}
+          />
+          <span
+            className="size-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: colour }}
+          />
+          <span className="truncate">{item.name}</span>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="font-medium">{formatMoney(item.value)}</div>
+          <div className="text-xs text-muted-foreground">
+            {Math.round(share * 100)}% - {item.txnCount} txns
+          </div>
+        </div>
+      </button>
+
+      {isExpanded && (
+        <div className="border-t px-3 py-2">
+          {transactions.isLoading ? (
+            <div className="space-y-2 py-1">
+              <Skeleton className="h-6 w-full" />
+              <Skeleton className="h-6 w-10/12" />
+            </div>
+          ) : transactions.error ? (
+            <p className="py-2 text-sm text-destructive">
+              {getErrorMessage(transactions.error)}
+            </p>
+          ) : (transactions.data?.length ?? 0) === 0 ? (
+            <p className="py-2 text-sm text-muted-foreground">
+              No transactions found for this category.
+            </p>
+          ) : (
+            <CategoryTransactionList rows={transactions.data ?? []} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CategoryTransactionList({ rows }: { rows: CategoryTransaction[] }) {
+  return (
+    <ul className="max-h-72 divide-y overflow-y-auto">
+      {rows.map((row) => (
+        <li
+          key={row.id}
+          className="flex items-start justify-between gap-3 py-2 text-sm"
+        >
+          <div className="min-w-0">
+            <p className="truncate font-medium">
+              {row.description ?? "No description"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {formatDate(row.date)}
+              {row.accountName ? ` - ${row.accountName}` : ""}
+            </p>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="tabular font-medium">
+              {formatMoney(Math.abs(row.amount))}
+            </div>
+            {row.reimbursed > 0 && (
+              <div className="text-xs text-muted-foreground">
+                net of {formatMoney(row.reimbursed)} reimbursed
+              </div>
+            )}
+            {row.originalCurrency &&
+              row.originalCurrency !== "AUD" &&
+              row.originalAmount !== null && (
+                <div className="text-xs text-muted-foreground">
+                  {formatForeignMoney(
+                    Math.abs(row.originalAmount),
+                    row.originalCurrency,
+                  )}
+                </div>
+              )}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
