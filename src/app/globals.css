@@ -157,3 +157,20 @@
     font-size: 16px;
   }
 }
+
+/*
+ * Recharts marks the chart root <svg> focusable (tabIndex 0) and every sector
+ * and bar tabIndex -1, so clicking anywhere on a chart focuses it and the
+ * `* { outline-ring/50 }` base rule paints a 5px ring around the entire chart.
+ * Nothing in these charts is keyboard-operable, so on a click that ring
+ * communicates nothing. Scoped to pointer focus, so a real Tab still matches
+ * :focus-visible and keeps a visible ring.
+ *
+ * Kept outside `@layer base` on purpose: unlayered author styles outrank the
+ * layered base rule that sets the outline colour, so this cannot be lost to a
+ * cascade-layer ordering change later.
+ */
+.recharts-wrapper :focus:not(:focus-visible),
+.recharts-surface:focus:not(:focus-visible) {
+  outline: none;
+}
