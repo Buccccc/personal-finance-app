@@ -200,7 +200,8 @@ async function fetchCategoryTransactions({
     .eq("type", type)
     .gte("date", from)
     .lte("date", to)
-    .order("date", { ascending: false });
+    .order("date", { ascending: false })
+    .order("id", { ascending: true });
 
   query = categoryId
     ? query.eq("category_id", categoryId)
@@ -261,7 +262,7 @@ async function fetchCategoryTransactions({
     }
   }
 
-  return rows
+  const mapped = rows
     .filter(
       // The view drops reimbursement income; it is not money Elias earned.
       (row) =>
@@ -291,6 +292,14 @@ async function fetchCategoryTransactions({
         originalCurrency: row.original_currency,
       };
     });
+
+  // Biggest first. Sorted on the net figure the row actually displays, not on
+  // transactions.amount — a reimbursed expense shows smaller than it was
+  // stored, and sorting in SQL would rank it on the pre-reimbursement number.
+  return mapped.sort(
+    (a, b) =>
+      Math.abs(b.amount) - Math.abs(a.amount) || b.date.localeCompare(a.date),
+  );
 }
 
 export function useCategoryTransactions(
