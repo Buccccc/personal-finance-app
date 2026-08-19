@@ -694,7 +694,7 @@ function CategoryBreakdownCard({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="w-full text-muted-foreground"
+                    className="h-11 w-full touch-manipulation text-muted-foreground sm:h-8"
                     onClick={() => setShowAll((value) => !value)}
                   >
                     {showAll
@@ -749,7 +749,7 @@ function CategoryRow({
         type="button"
         onClick={onToggle}
         aria-expanded={isExpanded}
-        className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex w-full touch-manipulation items-center justify-between gap-2 rounded-lg px-3 py-3 text-left text-sm hover:bg-accent/50 active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:gap-3 sm:py-2"
       >
         <div className="flex min-w-0 items-center gap-2">
           <ChevronDown
@@ -762,10 +762,10 @@ function CategoryRow({
             className="size-2.5 shrink-0 rounded-full"
             style={{ backgroundColor: colour }}
           />
-          <span className="truncate">{item.name}</span>
+          <span className="min-w-0 break-words">{item.name}</span>
         </div>
         <div className="shrink-0 text-right">
-          <div className="font-medium">{formatMoney(item.value)}</div>
+          <div className="tabular font-medium">{formatMoney(item.value)}</div>
           <div className="text-xs text-muted-foreground">
             {Math.round(share * 100)}% - {item.txnCount} txns
           </div>
@@ -773,7 +773,7 @@ function CategoryRow({
       </button>
 
       {isExpanded && (
-        <div className="border-t px-3 py-2">
+        <div className="border-t px-3 py-1 sm:py-2">
           {transactions.isLoading ? (
             <div className="space-y-2 py-1">
               <Skeleton className="h-6 w-full" />
@@ -798,14 +798,20 @@ function CategoryRow({
 
 function CategoryTransactionList({ rows }: { rows: CategoryTransaction[] }) {
   return (
-    <ul className="max-h-72 divide-y overflow-y-auto">
+    // No inner scroll on mobile: a nested scroll area inside a scrolling page
+    // is hard to escape on touch, so the page scrolls the list instead. The
+    // cap comes back from `sm` up, where a wheel can leave the container.
+    <ul className="divide-y sm:max-h-72 sm:overflow-y-auto">
       {rows.map((row) => (
         <li
           key={row.id}
-          className="flex items-start justify-between gap-3 py-2 text-sm"
+          className="flex items-start justify-between gap-2 py-2.5 text-sm sm:gap-3 sm:py-2"
         >
           <div className="min-w-0">
-            <p className="truncate font-medium">
+            {/* Bank descriptions are long and the useful part is the merchant
+                at the front. Two lines on mobile beats an ellipsis that eats
+                the whole name; one truncated line is fine once there is room. */}
+            <p className="line-clamp-2 font-medium break-words sm:truncate">
               {row.description ?? "No description"}
             </p>
             <p className="text-xs text-muted-foreground">
@@ -813,7 +819,9 @@ function CategoryTransactionList({ rows }: { rows: CategoryTransaction[] }) {
               {row.accountName ? ` - ${row.accountName}` : ""}
             </p>
           </div>
-          <div className="shrink-0 text-right">
+          {/* Capped so the reimbursement note wraps inside this column instead
+              of stealing width from the description on a narrow screen. */}
+          <div className="max-w-[45%] shrink-0 text-right sm:max-w-none">
             <div className="tabular font-medium">
               {formatMoney(Math.abs(row.amount))}
             </div>
